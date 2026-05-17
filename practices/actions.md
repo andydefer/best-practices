@@ -348,7 +348,7 @@ final class UserAction extends AbstractAction
 
 ### 3.2. Une Action d'api ne retourne qu'une Data, jamais un tableau brut
 
-> **⚠️ Une Action DOIT retourner une Data DTO quand elle utilise  `$this->json()`. Elle ne peut jamais retourner un tableau brut ou une collection.**
+> **⚠️ Une Action DOIT retourner une Data DTO quand elle utilise  `$this->json()`, le seul cas où l'on peut retourner un tableau est si le tableau ne contient qu'une seule clé. Elle ne peut jamais retourner un tableau brut ou une collection.**
 
 ```php
 // ✅ BON - Retourne une Data
