@@ -1,5 +1,3 @@
-# actions.md
-
 # Principe d'usage des Actions (Version finale)
 
 ## 1. Définition
