@@ -26,7 +26,6 @@ function updateField(UserCredentialsRecord $credentials): void { ... }
 ```
 
 ---
-
 ## 2. Séparation des responsabilités (⚠️ IMPORTANT)
 
 > **Un Record est STRICTEMENT réservé à l'usage interne. Il ne peut en aucun cas être retourné comme réponse HTTP.**
@@ -34,32 +33,32 @@ function updateField(UserCredentialsRecord $credentials): void { ... }
 | Composant | Usage | Réponse API |
 |-----------|-------|-------------|
 | **Record** | Communication interne (Services, Repositories) | ❌ **INTERDIT** |
-| **Data** | Réponse API (Controllers) | ✅ **OBLIGATOIRE** |
+| **Data** | Réponse API (Actions) | ✅ **OBLIGATOIRE** |
 
 ```php
 // ❌ MAUVAIS - Un Record ne répond pas à une API
-final class UserController extends Controller
+final class ShowUserAction extends AbstractAction
 {
-    public function show(int $id): JsonResponse
+    public function run(int $userId, ShowUserRequest $request): JsonResponse
     {
-        $record = $this->userService->getUser($id);
-        return response()->json($record);  // ← INTERDIT !
+        $record = $this->userService->getUser($userId);
+        return $this->json($record);  // ← INTERDIT !
     }
 }
 
-// ✅ BON - Le Controller transforme le Record en Data via une Factory
-final class UserController extends Controller
+// ✅ BON - L'Action transforme le Record en Data
+final class ShowUserAction extends AbstractAction
 {
-    public function show(int $id): JsonResponse
+    public function run(int $userId, ShowUserRequest $request): JsonResponse
     {
-        $record = $this->userService->getUser($id);      // ← Record (interne)
-        $data = $this->userDataFactory->fromRecord($record); // ← Data (API)
-        return response()->json($data);                  // ✅ Autorisé
+        $record = $this->userService->getUser($userId);  // ← Record (interne)
+        $data = UserData::fromRecord($record);           // ← Data (API)
+        return $this->json($data);                       // ✅ Autorisé
     }
 }
 ```
 
-**Règle d'or :** Si tu es dans un Controller et que tu veux retourner une réponse HTTP, tu utilises une **Data**, jamais un Record. Le Record s'arrête à la porte du Controller.
+**Règle d'or :** Si tu es dans une Action et que tu veux retourner une réponse HTTP, tu utilises une **Data**, jamais un Record. Le Record s'arrête à la porte de l'Action.
 
 ---
 
@@ -131,6 +130,119 @@ final class UserContextRecord extends AbstractRecord
 
 **Règle :** Un tableau (`array`) est autorisé UNIQUEMENT s'il est typé avec `array<Record>`, `array<scalaire>` ou `array<Enum>`. Les tableaux bruts non typés (`array $data`) sont interdits.
 
+> **⚠️ Important : un Record ne peut jamais être initialisé avec un tableau. Toutes les propriétés doivent être passées explicitement par nom.**
+
+```php
+// ✅ BON - Initialisation explicite
+$record = new ListUsersRecord(
+    search: $request->input('search'),
+    page: $request->integer('page', 1),
+);
+
+// ❌ MAUVAIS - Initialisation avec tableau
+$record = new ListUsersRecord($request->validated());
+```
+
+#### 4.1.1 Record optionnel avec `EmptyRecord`
+
+> **Pour les cas où un Record peut être optionnel (ex: filtres de recherche), utilisez `EmptyRecord` plutôt que `null`.**
+
+```php
+use AndyDefer\BestPractices\Records\EmptyRecord;
+use AndyDefer\BestPractices\Records\AbstractRecord;
+
+final class FindByRecord extends AbstractRecord
+{
+    public function __construct(
+        public readonly Recordable $filters = new EmptyRecord(),
+        public readonly ?int $limit = 100,
+        public readonly ?string $sortBy = null,
+        public readonly string $sortDir = 'asc',
+    ) {}
+}
+```
+
+**Code du `EmptyRecord` :**
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace AndyDefer\BestPractices\Records;
+
+/**
+ * Empty record for optional filter parameters.
+ *
+ * This record is used when a Service or Repository needs to accept a Record
+ * parameter but no actual data is required. It provides a type-safe way to
+ * handle optional filtering without using null or empty arrays.
+ *
+ * @author Andy Defer
+ * @package AndyDefer\BestPractices\Records
+ */
+final class EmptyRecord extends AbstractRecord
+{
+    public function __construct() {}
+}
+```
+
+**Pourquoi `EmptyRecord` plutôt que `null` ?**
+
+| Avec `null` | Avec `EmptyRecord` |
+|-------------|---------------------|
+| `$filters?->toArray() ?? []` | `$filters->toArray()` |
+| Condition ternaire partout | Pas de condition |
+| Risque d'oubli de `?` | Type-safe garanti |
+| `?Recordable` est ambigu | Le Record est toujours présent |
+
+```php
+// ✅ Avec EmptyRecord - Pas de condition spéciale
+$filtersArray = $record->filters->toArray(); // Retourne [] si EmptyRecord
+
+// ❌ Avec null - Il faut gérer le cas null
+$filtersArray = $record->filters?->toArray() ?? [];
+```
+
+`EmptyRecord` est une implémentation concrète d'`AbstractRecord` qui ne contient aucune propriété. Elle garantit que l'appel à `toArray()` retourne toujours un tableau vide `[]`.
+
+### 4.2 À ne PAS mettre dans un Record
+
+| Type interdit | Raison | Alternative |
+|---------------|--------|-------------|
+| `array` brut (non typé) | On ne sait pas ce qu'il contient | `array<Record>` |
+| `Model` (Eloquent) | Contient de la logique et des relations | `UserRecord`, `DoctorRecord` |
+| `Data` (DTO API) | Destiné à la couche API uniquement | `UserRecord` |
+| `Collection` | Structure non typée | `array<Record>` |
+| `Carbon` / `DateTime` | Contient de la logique et des comportements | `string` ISO 8601 |
+
+```php
+// ❌ MAUVAIS
+final class AppointmentRecord extends AbstractRecord
+{
+    public function __construct(
+        public Appointment $appointment,        // ❌ Model interdit
+        public array $items,                   // ❌ array brut non typé
+        public Collection $users,              // ❌ Collection interdite
+        public Carbon $createdAt,              // ❌ Carbon interdit
+    ) {}
+}
+
+// ✅ BON
+final class AppointmentRecord extends AbstractRecord
+{
+    public function __construct(
+        public string $appointmentId,
+        public string $doctorId,
+        public string $startDate,
+        /** @var array<int, AppointmentItemRecord> */
+        public array $items,                   // ✅ array<Record>
+        /** @var array<int, UserRecord> */
+        public array $users,                   // ✅ array<Record>
+        public string $createdAt,              // ✅ string ISO
+    ) {}
+}
+```
 ### 4.2 À ne PAS mettre dans un Record
 
 | Type interdit | Raison | Alternative |
@@ -223,7 +335,7 @@ $response = Http::post('https://api.external.com/users', $record->toJson());
 |---------|-------------------------------------------|
 | `fromArray()` | La création n'est pas la responsabilité du Record (c'est le rôle du constructeur) |
 | `validate()` | Un Record ne doit contenir aucune logique de validation |
-| `toData()` | La transformation en Data est le rôle des Factory, pas des Records |
+| `toData()` | La transformation en Data se fait dans l'Action via `UserData::fromRecord($record)` |
 | `save()` | Un Record ne doit jamais interagir avec la base de données |
 | `collect()` | La création de collections de Records n'est pas une méthode générique |
 
@@ -234,38 +346,94 @@ $response = Http::post('https://api.external.com/users', $record->toJson());
 
 declare(strict_types=1);
 
-namespace App\Records;
+namespace AndyDefer\BestPractices\Records;
 
 use DateTimeInterface;
 use ReflectionClass;
 use ReflectionProperty;
+use Traversable;
 use UnitEnum;
 
 /**
- * Abstract base class for all Records.
+ * Abstract base class for all Record DTOs.
  *
- * PURE RECORD - No logic, just data structure.
- * 
- * Les Records sont utilisés UNIQUEMENT pour la communication interne
- * (Services, Repositories). Ils ne sont JAMAIS retournés comme réponses API.
+ * Provides pure data transformation capabilities including array conversion,
+ * snake_case key normalization, nested record handling, enum conversion,
+ * and date formatting. Records are immutable structures used exclusively for
+ * internal communication between Services and Repositories.
+ *
+ * @author Andy Defer
+ * @package AndyDefer\BestPractices\Records
  */
-abstract class AbstractRecord
+abstract class AbstractRecord implements Recordable
 {
     /**
-     * Convert the record to array (for database insertion).
-     * 
-     * La sérialisation est automatique à partir de toutes les propriétés publiques.
-     * Les clés sont automatiquement converties en snake_case.
+     * Converts the Record to an associative array with snake_case keys.
      *
-     * @return array<string, mixed>
+     * Recursively processes all public properties, converting nested Record objects,
+     * traversable structures, enums, arrays, and date objects to their array/string
+     * representations. All array keys are automatically converted from camelCase
+     * to snake_case for database compatibility.
+     *
+     * @return array<string, mixed> Associative array representation of the Record
      */
     public function toArray(): array
     {
-        return $this->normalizeArray($this->getProperties());
+        $properties = $this->extractPublicPropertiesWithSnakeKeys();
+
+        return $this->normalizeArray($properties);
     }
 
     /**
-     * Convert the record to JSON string (for HTTP client).
+     * Converts the Record to an associative array for database operations.
+     *
+     * Only includes non-null values, making it ideal for update operations
+     * where you only want to set provided fields. Keys are converted to snake_case.
+     *
+     * @return array<string, mixed> Associative array with only non-null values
+     */
+    public function toDatabase(): array
+    {
+        $properties = $this->extractPublicPropertiesWithSnakeKeys();
+        $normalized = $this->normalizeArray($properties);
+
+        // Remove null values recursively
+        return $this->removeNullValues($normalized);
+    }
+
+    /**
+     * Recursively removes null values from an array.
+     *
+     * @param array<string, mixed> $array Array to clean
+     * @return array<string, mixed> Array without null values
+     */
+    private function removeNullValues(array $array): array
+    {
+        $result = [];
+
+        foreach ($array as $key => $value) {
+            if ($value === null) {
+                continue;
+            }
+
+            if (is_array($value)) {
+                $value = $this->removeNullValues($value);
+                if (empty($value)) {
+                    continue;
+                }
+                $result[$key] = $value;
+            } else {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Converts the Record to a JSON string.
+     *
+     * @return string JSON representation of the Record
      */
     public function toJson(): string
     {
@@ -273,86 +441,139 @@ abstract class AbstractRecord
     }
 
     /**
-     * Get all public properties of the record.
+     * Extracts all public properties with keys converted to snake_case.
      *
-     * @return array<string, mixed>
+     * Uses reflection to access all public properties of the record,
+     * converts property names from camelCase to snake_case, and preserves
+     * the original values for further normalization.
+     *
+     * @return array<string, mixed> Associative array with snake_case keys
      */
-    private function getProperties(): array
+    private function extractPublicPropertiesWithSnakeKeys(): array
     {
         $reflection = new ReflectionClass($this);
-        $properties = [];
-        
-        foreach ($reflection->getProperties(ReflectionProperty::IS_PUBLIC) as $property) {
-            $name = $property->getName();
+        $properties = $reflection->getProperties(ReflectionProperty::IS_PUBLIC);
+        $result = [];
+
+        foreach ($properties as $property) {
             $value = $property->getValue($this);
-            
-            // Convert camelCase → snake_case pour les clés
-            $key = $this->camelToSnake($name);
-            $properties[$key] = $value;
+            $key = $this->convertCamelToSnake($property->getName());
+            $result[$key] = $value;
         }
-        
-        return $properties;
+
+        return $result;
     }
 
     /**
-     * Convert camelCase to snake_case.
+     * Converts a camelCase string to snake_case.
+     *
+     * @param string $input CamelCase string to convert
+     * @return string snake_case representation
      */
-    private function camelToSnake(string $input): string
+    private function convertCamelToSnake(string $input): string
     {
         return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $input));
     }
 
     /**
-     * Normalize an array recursively.
+     * Recursively normalizes array values for serialization.
      *
-     * @param array<string, mixed> $array
-     * @return array<string, mixed>
+     * @param array<string, mixed> $array Array to normalize
+     * @return array<string, mixed> Normalized array
      */
     private function normalizeArray(array $array): array
     {
         $result = [];
+
         foreach ($array as $key => $value) {
             $result[$key] = $this->normalizeValue($value);
         }
+
         return $result;
     }
 
     /**
-     * Normalize a value to a serializable format.
+     * Recursively normalizes a single value for serialization.
+     *
+     * Handles:
+     * - Nested Record objects (converted via their toArray method)
+     * - Traversable objects (converted to arrays recursively)
+     * - Enums (converted to scalar values or names)
+     * - DateTime objects (formatted as ISO 8601 UTC)
+     * - Arrays (recursively processed)
+     * - Null values (passed through)
+     * - Other scalars (passed through unchanged)
+     *
+     * @param mixed $value The value to normalize
+     * @return mixed Normalized value ready for array/JSON output
      */
     private function normalizeValue(mixed $value): mixed
     {
-        // Record → array (récursif)
+        // Record object → recursively convert to array
         if ($value instanceof self) {
             return $value->toArray();
         }
 
-        // Traversable (Collection, ArrayIterator, etc.) → array (récursif)
-        if ($value instanceof \Traversable) {
-            $result = [];
-            foreach ($value as $k => $v) {
-                $result[$k] = $this->normalizeValue($v);
-            }
-            return $result;
+        // Traversable (Collection, ArrayIterator, etc.) → convert to array recursively
+        if ($value instanceof Traversable) {
+            return $this->normalizeTraversable($value);
         }
 
-        // Enum → valeur scalaire
+        // Enum → convert to scalar value (backed) or case name (pure)
         if ($value instanceof UnitEnum) {
-            return $value instanceof \BackedEnum ? $value->value : $value->name;
+            return $this->normalizeEnum($value);
         }
 
-        // DateTimeInterface → ISO 8601 (sans microsecondes)
+        // DateTimeInterface → convert to UTC ISO 8601 string
         if ($value instanceof DateTimeInterface) {
             return $value->format('Y-m-d\TH:i:s\Z');
         }
 
-        // Tableau → récursif
+        // Array → recursively normalize each element
         if (is_array($value)) {
             return $this->normalizeArray($value);
         }
 
-        // Scalaire ou autre → retour brut
+        // Null or scalar → return as-is
         return $value;
+    }
+
+    /**
+     * Converts a Traversable object to a normalized array.
+     *
+     * Recursively processes each element of the traversable structure,
+     * applying the same normalization rules to nested values.
+     *
+     * @param Traversable $traversable The traversable object to convert
+     * @return array<int|string, mixed> Normalized array representation
+     */
+    private function normalizeTraversable(Traversable $traversable): array
+    {
+        $result = [];
+
+        foreach ($traversable as $key => $value) {
+            $result[$key] = $this->normalizeValue($value);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Converts an Enum to its serializable representation.
+     *
+     * For backed enums (string/int backed), returns the backing value.
+     * For pure enums (non-backed), returns the enum case name.
+     *
+     * @param UnitEnum $enum The enum instance to convert
+     * @return string|int Scalar representation of the enum
+     */
+    private function normalizeEnum(UnitEnum $enum): string|int
+    {
+        if ($enum instanceof \BackedEnum) {
+            return $enum->value;
+        }
+
+        return $enum->name;
     }
 }
 ```
@@ -362,10 +583,10 @@ abstract class AbstractRecord
 | Ce que ça offre |
 |-----------------|
 | `toArray(): array` (sérialisation automatique + normalisation) |
+| `toDatabase(): array` (exclut les valeurs null) |
 | `toJson(): string` |
 | Conversion camelCase → snake_case automatique |
 | Normalisation récursive des types complexes |
-
 ---
 
 ## 6. Appendice : Bonnes pratiques recommandées
@@ -452,18 +673,22 @@ final class UserService
 | `readonly` est facultatif (la normalisation fonctionne sans) | ℹ️ Optionnel |
 
 ---
-
-## 7. Utilisation de `toArray()` et `toJson()`
+## 7. Utilisation de `toArray()`, `toDatabase()` et `toJson()`
 
 | Méthode | Usage | Exemple |
 |---------|-------|---------|
-| `toArray()` | Insertion en base de données | `DB::table('users')->insert($record->toArray())` |
+| `toArray()` | Insertion/Export (avec valeurs null conservées) | `DB::table('users')->insert($record->toArray())` |
+| `toDatabase()` | Update (retire les champs null) | `DB::table('users')->where('id', 1)->update($record->toDatabase())` |
 | `toJson()` | Envoi via HTTP Client (API externe) | `Http::post('https://api.external.com', $record->toJson())` |
 
 ```php
-// ✅ Insertion en base de données
+// ✅ Insertion en base de données (toArray conserve les null)
 $record = new UserRecord(...);
 DB::table('users')->insert($record->toArray());
+
+// ✅ Update many rows en base de données (toDatabase retire les null)
+$record = new UserRecord(name: 'New Name'); // seul name est modifié
+DB::table('users')->where('role', 'admin')->update($record->toDatabase());
 
 // ✅ Envoi à une API externe
 $record = new PaymentRecord(...);
@@ -605,7 +830,7 @@ final class ExternalApiResponseRecord extends AbstractRecord
 │                    (logique métier pure)                        │
 │                                                                 │
 │   Reçoit des RECORDS et retourne des RECORDS                    │
-│   ❌ Ne connaît pas les Data                                     │
+│   ❌ Ne connaît pas les Data                                    │
 └─────────────────────────────┬───────────────────────────────────┘
                               │
                               ▼
@@ -622,11 +847,11 @@ final class ExternalApiResponseRecord extends AbstractRecord
 │         (transforme Record → Data pour la couche API)           │
 │                                                                 │
 │   Reçoit des RECORDS et retourne des DATA                       │
-│   ❌ Appelée UNIQUEMENT dans les Controllers                     │
+│   ❌ Appelée UNIQUEMENT dans les Controllers                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**⚠️ Rappel :** Les Records ne sont **JAMAIS** utilisés pour les réponses API. C'est le rôle des **Data class**. La Factory est le seul composant autorisé à transformer un Record en Data, et elle n'est appelée que dans les Controllers.
+**⚠️ Rappel :** Les Records ne sont **JAMAIS** utilisés pour les réponses API. C'est le rôle des **Data class**. La transformation Record → Data se fait directement dans l'Action via `UserData::fromRecord($record)` et n'est appelée que dans l'Action.
 
 ---
 
@@ -651,20 +876,48 @@ final class UserService
     }
 }
 ```
-
-### 10.2 Factory qui transforme un Record en Data
+### 10.2 Transformation d'un Record en Data
 
 ```php
-final class UserProfileDataFactory
+// ✅ BON - Transformation directe dans l'Action
+final class ShowUserProfileAction extends AbstractAction
 {
-    // ✅ BON - Factory respecte les 4 méthodes autorisées
-    public function fromRecord(UserWithContextRecord $record): UserProfileData
+    public function run(int $userId, ShowUserProfileRequest $request): JsonResponse
     {
-        return new UserProfileData(
+        $record = $this->userService->getUserWithContext(
+            userId: $userId,
+            currentUserId: auth()->id(),
+            timezone: $request->input('timezone', 'UTC'),
+        );
+        
+        if ($record === null) {
+            return $this->json(null, 404);
+        }
+        
+        // Transformation directe Record → Data
+        $userData = UserProfileData::fromRecord($record);
+        
+        return $this->json($userData);
+    }
+}
+
+// La Data avec sa propre méthode fromRecord()
+final class UserProfileData extends AbstractData
+{
+    private function __construct(
+        public readonly string $id,
+        public readonly string $name,
+        public readonly ?string $timezone = null,
+        public readonly ?bool $canEdit = null,
+    ) {}
+    
+    public static function fromRecord(UserWithContextRecord $record): self
+    {
+        return new self(
             id: (string) $record->user->id,
             name: $record->user->name,
             timezone: $record->context->timezone,
-            canEdit: $record->context->currentUserId === $record->user->id,
+            canEdit: $record->canEdit,
         );
     }
 }
@@ -687,8 +940,8 @@ final class UserController extends Controller
         // 2. Appeler le Service avec le Record (interne)
         $result = $this->userService->updateUserField($credentials);
         
-        // 3. Transformer le Record en Data via la Factory
-        $responseData = $this->userUpdateDataFactory->fromRecord($result);
+        // 3. Transformer le Record en Data via la méthode statique de la Data
+        $responseData = UserUpdateData::fromRecord($result);
         
         // 4. Réponse avec une Data (jamais un Record)
         return response()->json($responseData, JsonResponse::HTTP_OK);
@@ -749,7 +1002,6 @@ final class PaymentGatewayService
 | **Utilisation** | Communication interne UNIQUEMENT (pas de réponse API) |
 
 ---
-
 ## 12. Ce que les Records NE peuvent PAS faire
 
 ```php
@@ -765,10 +1017,9 @@ public function getTotal(): float { ... }
 // ❌ JAMAIS - Pas de réponse API
 return response()->json($record);
 
-// ❌ JAMAIS - Pas de transformation en Data (c'est le rôle des Factory)
+// ❌ JAMAIS - Pas de transformation en Data (c'est le rôle de la Data dans l'Action)
 public function toData(): UserData { ... }
 ```
-
 ---
 
 ## 13. Checklist d'acceptance
@@ -816,7 +1067,7 @@ return response()->json($userRecord);  // utiliser UserData à la place
 public function isValid(): bool { ... }  // à mettre dans un Validator ou Service
 
 // ❌ Transformation en Data dans le Record
-public function toData(): UserData { ... }  // c'est le rôle des Factory
+public function toData(): UserData { ... }  // c'est le rôle de la Data dans l'Action
 ```
 
 ---
@@ -830,26 +1081,15 @@ public function toData(): UserData { ... }  // c'est le rôle des Factory
 | Composant | Rôle | Logique | Réponse API | Sérialisation |
 |-----------|------|---------|-------------|---------------|
 | **Record** | Communication interne (Services, Repositories) | ❌ Aucune | ❌ **INTERDIT** | Automatique |
-| **Data** | Réponse API (Controllers) | ❌ Aucune | ✅ **OBLIGATOIRE** | Manuel (via Factory) |
-| **Factory** | Transformation Record → Data | ✅ Logique de transformation | ❌ Non | N/A |
+| **Data** | Réponse API (Actions) | ❌ Aucune | ✅ **OBLIGATOIRE** | Via `toArray()` |
 | **Service** | Logique métier | ✅ Oui | ❌ Non | N/A |
 
 ### 15.2 Schéma récapitulatif
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  REQUEST     │     │   RECORD     │     │   RECORD     │     │    DATA      │
-│  (HTTP)      │ ──► │  (interne)   │ ──► │  (interne)   │ ──► │  (réponse)   │
-└──────────────┘     └──────────────┘     └──────────────┘     └──────────────┘
-       │                    │                    │                    │
-       ▼                    ▼                    ▼                    ▼
-   Controller          Service             Repository            Controller
-   (construit)         (logique)            (accès)            (transforme via
-                                                               Factory → Data)
+Record → Communication interne (Services, Repositories)
+Data   → Réponse API (Actions)
+Service → Logique métier (ne connaît ni Record ni Data)
 ```
 
-```
-Record → Communication interne (Services, Repositories)
-Data   → Réponse API (Controllers)
-Factory → Transformation Record → Data (UNIQUEMENT dans les Controllers)
-Service → Logique métier (ne connaît pas les Data)
+> **Règle :** La transformation Record → Data se fait directement dans l'Action via `UserData::fromRecord($record)`.
