@@ -4,7 +4,7 @@
 
 Une **Action** est un composant qui encapsule la logique d'une **route unique**. Elle reçoit les paramètres d'URL et une Form Request, peut créer un Record, orchestre les Tasks/Services/Workers, et retourne une réponse via le trait `SendsHttpResponses`.
 
-**⚠️ Une Action a un type de retour unique. Elle ne peut pas retourner deux types différents (`JsonResponse|InertiaResponse`).**
+**⚠️ Une Action a un type de retour unique. Elle ne peut pas retourner deux types différents (`JsonResponse|InertiaResponse`). Sauf en cas de redirection avec une (`RedirectResponse`)**
 
 ```
 Route → Action → SendsHttpResponses → Response
