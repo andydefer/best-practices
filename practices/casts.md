@@ -288,8 +288,7 @@ final class JsonCast implements CastsAttributes
                 $decoded = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
                 return is_array($decoded) ? $decoded : null;
             } catch (JsonException $e) {
-                // ⚠️ Log l'erreur mais ne plante pas
-                logger()->error('Failed to decode JSON', ['error' => $e->getMessage()]);
+              
                 return null;
             }
         }
