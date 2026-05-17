@@ -348,7 +348,7 @@ final class UserAction extends AbstractAction
 | **Testabilité** | Chaque Action se teste indépendamment |
 | **Visibilité** | `ShowUserAction` dit clairement ce qu'il fait |
 
-### 3.2. Une Action ne retourne qu'une Data, jamais un tableau brut
+### 3.2. Une Action d'api ne retourne qu'une Data, jamais un tableau brut
 
 > **⚠️ Une Action DOIT retourner une Data DTO quand elle utilise  `$this->json()`. Elle ne peut jamais retourner un tableau brut ou une collection.**
 
