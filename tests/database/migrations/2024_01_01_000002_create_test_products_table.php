@@ -1,6 +1,6 @@
 <?php
 
-// tests/database/migrations/create_test_products_table.php
+// tests/database/migrations/2024_01_01_000002_create_test_products_table.php
 declare(strict_types=1);
 
 use Illuminate\Database\Migrations\Migration;
@@ -16,6 +16,8 @@ return new class extends Migration
             $table->string('name');
             $table->integer('price')->nullable();
             $table->json('metadata')->nullable();
+            $table->boolean('is_featured')->default(false);
+            $table->morphs('productable');
             $table->timestamps();
         });
     }

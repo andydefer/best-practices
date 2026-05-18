@@ -6,11 +6,11 @@ namespace AndyDefer\BestPractices\Tests\Fixtures\Enums;
 
 use AndyDefer\BestPractices\Traits\Enum\Enumable;
 
-enum TestPureEnum
+enum TestUserRole: string
 {
     use Enumable;
 
-    case ADMIN;
-    case USER;
-    case GUEST;
+    case ADMIN = 'admin';
+    case USER = 'user';
+    case GUEST = 'guest';
 }

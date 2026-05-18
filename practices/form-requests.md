@@ -1,17 +1,21 @@
-# Form Request
+Voici la dernière version de `form-requests.md` que nous avons écrite ensemble :
 
-## Principe d'usage des Form Requests (Version finale)
+---
+
+# Principe d'usage des Form Requests (Version finale)
 
 ## 1. Définition
 
 Une **Form Request** est une classe qui encapsule les règles de validation pour une **route unique**. Elle est utilisée à la fois par les routes web et API.
 
+**⚠️ Toute Form Request DOIT étendre `AbstractRequest` et implémenter la méthode `toRecord()`.**
+
 ```
-Route → Form Request → Action
+Route → Form Request → toRecord() → Record → Action
 ```
 
 ```php
-final class ListUsersRequest extends FormRequest
+final class ListUsersRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
@@ -27,30 +31,90 @@ final class ListUsersRequest extends FormRequest
             'per_page' => 'nullable|integer|min:1|max:100',
         ];
     }
+    
+    public function toRecord(): ListUsersRecord
+    {
+        return new ListUsersRecord(
+            search: $this->input('search'),
+            role: $this->input('role'),
+            page: $this->integer('page', 1),
+            perPage: $this->integer('per_page', 15),
+        );
+    }
 }
 ```
 
 ---
 
-## 2. Règle fondamentale (⚠️ IMMUABLE)
+## 2. Les classes fondamentales : AbstractRequest et Recordable
+
+### 2.1. Interface Recordable
+
+L'interface que tout Record doit implémenter (via `AbstractRecord`) :
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace AndyDefer\BestPractices\Records;
+
+interface Recordable
+{
+    public function toArray(): array;
+    public function toDatabase(): array;
+    public function toJson(): string;
+}
+```
+
+### 2.2. AbstractRequest
+
+La classe abstraite que **toute Form Request doit étendre** :
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace AndyDefer\BestPractices\Http\Requests;
+
+use AndyDefer\BestPractices\Records\Recordable;
+use Illuminate\Foundation\Http\FormRequest;
+
+abstract class AbstractRequest extends FormRequest
+{
+    abstract public function toRecord(): Recordable;
+}
+```
+
+### 2.3. Ce qu'offre AbstractRequest
+
+| Méthode | Description |
+|---------|-------------|
+| `toRecord()` | Transforme la requête validée en Record (obligatoire) |
+| Hérite de toutes les méthodes de `FormRequest` | `validated()`, `input()`, `boolean()`, `integer()`, etc. |
+
+---
+
+## 3. Règle fondamentale (⚠️ IMMUABLE)
 
 > **Une Form Request est dédiée à UNE SEULE route. On ne peut pas réutiliser la même Form Request pour deux routes différentes.**
 
 ```php
 // ✅ BON - Form Request dédiée à une route
-final class ListUsersRequest extends FormRequest
+final class ListUsersRequest extends AbstractRequest
 {
     // Utilisée uniquement pour GET /users
 }
 
 // ❌ MAUVAIS - Form Request réutilisée
-final class UserRequest extends FormRequest
+final class UserRequest extends AbstractRequest
 {
-    // Utilisée pour GET /users, POST /users, etc.  // ❌
+    // Utilisée pour GET /users, POST /users, etc.
 }
 ```
 
-### 2.1 Pourquoi une Form Request par route ?
+### 3.1 Pourquoi une Form Request par route ?
 
 | Raison | Explication |
 |--------|-------------|
@@ -60,33 +124,113 @@ final class UserRequest extends FormRequest
 
 ---
 
-## 3. Convention de nommage
+## 4. Règle : Une Action ne reçoit JAMAIS une Request (⚠️ RÈGLE ABSOLUE)
 
-> **Le nom de la Form Request doit correspondre à la route et à l'Action associée.**
-
-| Route | Action | Form Request |
-|-------|--------|--------------|
-| `GET /users` | `ListUsersAction` | `ListUsersRequest` |
-| `GET /users/{userId}` | `ShowUserAction` | `ShowUserRequest` |
-| `POST /users` | `CreateUserAction` | `CreateUserRequest` |
-| `PUT /users/{userId}` | `ReplaceUserAction` | `ReplaceUserRequest` |
-| `PATCH /users/{userId}` | `UpdateUserAction` | `UpdateUserRequest` |
-| `DELETE /users/{userId}` | `DeleteUserAction` | `DeleteUserRequest` |
+> **⚠️ Une Action ne peut jamais recevoir une Form Request en paramètre. Elle reçoit TOUJOURS un Record créé par la méthode `toRecord()` de la Request.**
 
 ```php
-// ✅ BON - Nom correspond à la route
-final class ListUsersRequest extends FormRequest { ... }
-final class ShowUserRequest extends FormRequest { ... }
+// ✅ BON - L'Action reçoit un Record
+final class ShowUserAction extends AbstractAction
+{
+    public function run(ShowUserRecord $record): JsonResponse
+    {
+        // $record contient TOUT ce dont l'Action a besoin
+    }
+}
 
-// ❌ MAUVAIS - Nom trop générique
-final class UserRequest extends FormRequest { ... }
+// ❌ MAUVAIS - L'Action reçoit une Request (INTERDIT)
+final class ShowUserAction extends AbstractAction
+{
+    public function run(ShowUserRequest $request): JsonResponse  // ❌
+    {
+        // ...
+    }
+}
+```
+
+### 4.1 Pourquoi cette règle ?
+
+| Raison | Explication |
+|--------|-------------|
+| **Testabilité** | Un Record se crée facilement, une Request se mocke difficilement |
+| **Pureté** | L'Action ne dépend plus de Laravel |
+| **Contrat explicite** | Le Record dit exactement ce dont l'Action a besoin |
+| **Réutilisabilité** | Le Record peut être créé par d'autres moyens |
+
+---
+
+## 5. La méthode `toRecord()` (⚠️ OBLIGATOIRE)
+
+> **⚠️ Toute Form Request DOIT implémenter la méthode `toRecord()`. Cette méthode transforme la requête validée en Record contenant TOUTES les données dont l'Action aura besoin.**
+
+### 5.1 Ce que doit contenir le Record
+
+| Source | Exemple | Récupération |
+|--------|---------|--------------|
+| **Paramètres d'URL** | `userId` | `(int) $this->route('userId')` |
+| **Paramètres de requête** | `include_profile` | `$this->boolean('include_profile')` |
+| **Corps de la requête** | `name`, `email` | `$this->input('name')` |
+| **Authentification** | `currentUserId` | `auth()->id()` ou `$this->user()->id` |
+| **Métadonnées** | `ip`, `userAgent` | `$this->ip()`, `$this->userAgent()` |
+
+### 5.2 Exemple complet
+
+```php
+final class ShowUserRequest extends AbstractRequest
+{
+    public function rules(): array
+    {
+        return [
+            'include_profile' => 'nullable|boolean',
+            'timezone' => 'nullable|timezone',
+        ];
+    }
+    
+    public function toRecord(): ShowUserRecord
+    {
+        return new ShowUserRecord(
+            id: (int) $this->route('userId'),
+            currentUserId: auth()->id(),
+            includeProfile: $this->boolean('include_profile'),
+            timezone: $this->input('timezone', 'UTC'),
+            ip: $this->ip(),
+            userAgent: $this->userAgent(),
+        );
+    }
+}
+```
+
+### 5.3 Règle : Un Record contient TOUT ce dont l'Action a besoin
+
+> **⚠️ Le Record DOIT contenir l'intégralité des données nécessaires à l'Action. L'Action ne doit jamais aller chercher des données ailleurs.**
+
+```php
+// ✅ BON - Toutes les données sont dans le Record
+final class ShowUserAction extends AbstractAction
+{
+    public function run(ShowUserRecord $record): JsonResponse
+    {
+        $userId = $record->id;
+        $currentUserId = $record->currentUserId;
+    }
+}
+
+// ❌ MAUVAIS - L'Action va chercher des données ailleurs
+final class ShowUserAction extends AbstractAction
+{
+    public function run(ShowUserRecord $record): JsonResponse
+    {
+        $currentUserId = auth()->id();  // ❌ À mettre dans le Record
+        $ip = request()->ip();          // ❌ À mettre dans le Record
+    }
+}
 ```
 
 ---
 
-## 4. Règles de validation
+## 6. Règles de validation
 
-### 4.1 Paramètres d'URL vs Paramètres de requête
+### 6.1 Paramètres d'URL vs Paramètres de requête
 
 | Type | Emplacement | Convention | Validation |
 |------|-------------|------------|------------|
@@ -96,318 +240,223 @@ final class UserRequest extends FormRequest { ... }
 ```php
 // URL: GET /users?user_slug=john&page=2&per_page=15
 
-final class ListUsersRequest extends FormRequest
+final class ListUsersRequest extends AbstractRequest
 {
     public function rules(): array
     {
         return [
-            // Paramètres de requête (snake_case)
             'user_slug' => 'nullable|string|exists:users,slug',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
         ];
     }
+    
+    public function toRecord(): ListUsersRecord
+    {
+        return new ListUsersRecord(
+            userSlug: $this->input('user_slug'),
+            page: $this->integer('page', 1),
+            perPage: $this->integer('per_page', 15),
+        );
+    }
 }
+```
 
-// URL: GET /users/{userId}?include_profile=true
+### 6.2 Règle : Un paramètre d'URL n'est pas dans les règles
 
-final class ShowUserRequest extends FormRequest
+> **⚠️ Les paramètres d'URL (`{userId}`, `{postId}`) ne sont PAS validés par la Form Request. Ils sont directement intégrés dans le Record via `$this->route()`.**
+
+```php
+final class ShowUserRequest extends AbstractRequest
 {
     public function rules(): array
     {
         return [
-            // Paramètre de requête (snake_case)
             'include_profile' => 'nullable|boolean',
         ];
     }
     
-    // Le paramètre d'URL {userId} n'est pas dans les règles
-    // Il est récupéré directement dans l'Action via le paramètre de la méthode run()
-}
-```
-
-### 4.2 Règle : Un paramètre d'URL n'est pas dans les règles
-
-> **⚠️ Les paramètres d'URL (`{userId}`, `{postId}`) ne sont PAS validés par la Form Request. Ils sont typés directement dans la méthode `run()` de l'Action.**
-
-```php
-// La Form Request ne valide pas les paramètres d'URL
-final class ShowUserRequest extends FormRequest
-{
-    public function rules(): array
+    public function toRecord(): ShowUserRecord
     {
-        return [
-            // Seulement les paramètres de requête
-            'include_profile' => 'nullable|boolean',
-        ];
-    }
-}
-
-// L'Action type le paramètre d'URL
-final class ShowUserAction extends AbstractAction
-{
-    public function run(int $userId, ShowUserRequest $request): JsonResponse
-    {
-        // $userId est déjà typé et validé (int)
-        // $request contient les paramètres de requête validés
+        return new ShowUserRecord(
+            id: (int) $this->route('userId'),
+            includeProfile: $this->boolean('include_profile'),
+        );
     }
 }
 ```
 
 ---
-## 5. Méthode `authorize()` (⚠️ RÈGLES STRICTES)
 
-> **La méthode `authorize()` doit rester LÉGÈRE et SIMPLE. Pas de logique complexe, pas d'effets de bord, pas d'injection de dépendances. Les FormRequests sont des DTOs de validation, pas des orchestrateurs.**
+## 7. Méthode `authorize()` (⚠️ RÈGLES STRICTES)
 
-### 5.1 Cas simples (AUTORISÉS)
+> **La méthode `authorize()` doit rester LÉGÈRE et SIMPLE. Pas de logique complexe, pas d'effets de bord, pas d'injection de dépendances.**
+
+### 7.1 Cas simples (AUTORISÉS)
 
 ```php
-final class UpdateUserRequest extends FormRequest
+// ✅ AUTORISÉ - Comparaison directe
+public function authorize(): bool
 {
-    // ✅ AUTORISÉ - Comparaison directe
-    public function authorize(): bool
-    {
-        $userId = (int) $this->route('userId');
-        
-        return $this->user()->id === $userId;
-    }
+    $userId = (int) $this->route('userId');
+    return $this->user()->id === $userId;
+}
+
+// ✅ AUTORISÉ - Vérification de rôle simple
+public function authorize(): bool
+{
+    return $this->user()->status->isAdmin();
+}
+
+// ✅ AUTORISÉ - Conditions combinées simples
+public function authorize(): bool
+{
+    $userId = (int) $this->route('userId');
+    return $this->user()->id === $userId || $this->user()->status->isAdmin();
 }
 ```
 
-```php
-final class UpdateUserRequest extends FormRequest
-{
-    // ✅ AUTORISÉ - Vérification de rôle simple
-    public function authorize(): bool
-    {
-        return $this->user()->status->isAdmin();
-    }
-}
-```
+### 7.2 Cas complexes (DÉLÉGUER À L'ACTION)
 
-```php
-final class UpdateUserRequest extends FormRequest
-{
-    // ✅ AUTORISÉ - Conditions combinées simples
-    public function authorize(): bool
-    {
-        $userId = (int) $this->route('userId');
-        
-        return $this->user()->id === $userId || $this->user()->status->isAdmin();
-    }
-}
-```
-
-### 5.2 Cas complexes (DÉLÉGUER À L'ACTION)
-
-> **⚠️ RÈGLE D'OR : Si l'autorisation nécessite plus de 3 conditions, des appels repository, ou des règles métier complexes, la logique d'autorisation doit être déléguée à l'Action qui utilisera une Task.**
+> **⚠️ Si l'autorisation nécessite plus de 3 conditions, des appels repository, ou des règles métier complexes, la logique d'autorisation doit être déléguée à l'Action qui utilisera une Task.**
 
 ```php
 // ✅ BON - Logique simple dans authorize()
-final class UpdateUserRequest extends FormRequest
+final class UpdateUserRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
-        // Juste vérifier que l'ID est présent
         return $this->route('userId') !== null;
+    }
+    
+    public function toRecord(): UpdateUserRecord
+    {
+        return new UpdateUserRecord(
+            userId: (int) $this->route('userId'),
+            currentUserId: auth()->id(),
+            name: $this->input('name'),
+        );
     }
 }
 
 // La logique complexe est dans l'Action
 final class UpdateUserAction extends AbstractAction
 {
-    public function __construct(
-        private readonly UserCanUpdateTask $userCanUpdateTask,
-    ) {}
-    
-    public function execute(UpdateUserRequest $request): UserResource
+    public function run(UpdateUserRecord $record): JsonResponse
     {
-        $userId = (int) $request->route('userId');
-        
-        // ✅ La Task contient la logique métier complexe
         if (!$this->userCanUpdateTask->execute(new UserCanUpdateRecord(
-            currentUserId: $request->user()->id,
-            targetUserId: $userId,
+            currentUserId: $record->currentUserId,
+            targetUserId: $record->userId,
         ))) {
-            throw new UnauthorizedException('You cannot update this user');
+            throw new UnauthorizedException();
         }
-        
-        // ... suite de l'action
+        // ...
     }
 }
 ```
 
-### 5.3 Ce qui est INTERDIT dans `authorize()`
+### 7.3 Ce qui est INTERDIT dans `authorize()`
 
 ```php
-final class UpdateUserRequest extends FormRequest
+// ❌ INTERDIT - Pas de constructeur avec dépendances
+public function __construct(private readonly UserCanUpdateTask $task) { ... }
+
+// ❌ INTERDIT - Appel à des Tasks
+public function authorize(): bool
 {
-    // ❌ INTERDIT - Pas de constructeur avec dépendances
-    public function __construct(
-        private readonly UserCanUpdateTask $userCanUpdateTask,
-    ) {
-        parent::__construct();
-    }
-    
-    // ❌ INTERDIT - Logique métier complexe
-    // ❌ INTERDIT - Appel à des Tasks
-    // ❌ INTERDIT - Effets de bord
-    public function authorize(): bool
-    {
-        $userId = (int) $this->route('userId');
-        
-        // ❌ Appel à une Task (trop lourd)
-        return $this->userCanUpdateTask->execute(new UserCanUpdateRecord(
-            currentUserId: $this->user()->id,
-            targetUserId: $userId,
-        ));
-    }
+    return $this->task->execute(...);
+}
+
+// ❌ INTERDIT - Effets de bord
+public function authorize(): bool
+{
+    Log::info('Authorization check');
+    return true;
 }
 ```
 
-```php
-final class UpdateUserRequest extends FormRequest
-{
-    // ❌ INTERDIT - Tout ce qui suit est interdit
-    public function authorize(): bool
-    {
-        // ❌ Effet de bord (log)
-        Log::info('Authorization check');
-        
-        // ❌ Appel API externe
-        Http::post('https://api.audit.com/log', [...]);
-        
-        // ❌ Transaction DB
-        DB::beginTransaction();
-        
-        // ❌ Envoi d'email
-        Mail::send(...);
-        
-        // ❌ Logique imbriquée complexe (plus de 3 niveaux)
-        $user = User::find($this->route('userId'));
-        if ($user && $user->role === 'admin') {
-            if ($this->user()->status->isSuperAdmin()) {
-                if ($user->status === 'active') {
-                   ....
-                }
-            }
-        }
-        
-        return false;
-    }
-}
-```
-
-### 5.4 Récapitulatif des responsabilités
-
-| Composant | Responsabilité | Exemple |
-|-----------|---------------|---------|
-| **FormRequest** | Validation basique et présence des données | `return $this->route('userId') !== null` |
-| **Action** | Orchestration et gestion des erreurs d'autorisation | Vérifie les droits via Task, lance des exceptions |
-| **Task** | Logique métier et testable | Vérifie si un utilisateur peut en modifier un autre |
-| **Worker** | Groupement de Tasks | Envoi d'email, log, notification |
-
-### 5.5 Pourquoi ces interdictions ?
-
-| Problème | Solution |
-|----------|----------|
-| **FormRequest trop lourde** → Rester simple | Les FormRequests sont des DTOs, pas des services |
-| **Logique complexe** → Déplacer dans l'Action + Task | L'Action orchestre, la Task exécute la logique |
-| **Injection de dépendances** → À éviter dans FormRequest | Les FormRequests sont instanciées automatiquement par Laravel |
-| **Effets de bord** → Déplacer dans l'Action | Le Worker orchestre les effets de bord via des Tasks |
-| **Non testable facilement** → Logique dans Action/Task | Les Actions et Tasks sont facilement mockables |
-
-### 5.6 Structure recommandée
-
-```
-FormRequest (authorize simple)
-    ↓
-Action (orchestration)
-    ↓
-Task (logique métier)
-    ↓
-Repository (persistance)
-```
-
-### 5.7 Exemple complet et conforme
-
-```php
-// ✅ FormRequest - Ultra léger
-final class UpdateUserRequest extends FormRequest
-{
-    public function authorize(): bool
-    {
-        // Juste vérifier qu'un ID est fourni
-        return $this->route('userId') !== null;
-    }
-    
-    public function rules(): array
-    {
-        return [
-            'name' => ['sometimes', 'string', 'max:255'],
-            'email' => ['sometimes', 'email', 'unique:users,email,' . $this->route('userId')],
-        ];
-    }
-}
-
-// ✅ Action - Orchestration et délégation
-final class UpdateUserAction extends AbstractAction
-{
-    public function __construct(
-        private readonly UserCanUpdateTask $userCanUpdateTask,
-        private readonly UpdateUserTask $updateUserTask,
-    ) {}
-    
-    public function execute(UpdateUserRequest $request): UserResource
-    {
-        $userId = (int) $request->route('userId');
-        $currentUserId = $request->user()->id;
-        
-        // La logique complexe est dans une Task
-        if (!$this->userCanUpdateTask->execute(new UserCanUpdateRecord(
-            currentUserId: $currentUserId,
-            targetUserId: $userId,
-        ))) {
-            throw new UnauthorizedException('You cannot update this user');
-        }
-        
-        // Mise à jour dans une autre Task
-        $user = $this->updateUserTask->execute(new UpdateUserRecord(
-            userId: $userId,
-            data: $request->validated(),
-        ));
-        
-        return new UserResource($user);
-    }
-}
-
-// ✅ Task - Logique métier pure
-final class UserCanUpdateTask extends AbstractTask
-{
-    public function __construct(
-        private readonly UserRepository $userRepository,
-    ) {}
-    
-    public function execute(UserCanUpdateRecord $record): bool
-    {
-        // Logique complexe ici...
-        if ($record->currentUserId === $record->targetUserId) {
-            return true;
-        }
-        
-        $currentUser = $this->userRepository->find($record->currentUserId);
-        
-        return $currentUser?->status->isAdmin() ?? false;
-    }
-}
-```
 ---
 
-## 6. Méthodes INTERDITES (⚠️ STRICTEMENT INTERDITES)
+## 8. Règle : Pas de tests unitaires pour les Form Requests (⚠️ RÈGLE IMPORTANTE)
+
+> **⚠️ On n'écrit JAMAIS de tests unitaires pour les Form Requests. Ce que l'on veut tester sur la Form Request (validation, transformation en Record) est vérifié dans les tests d'intégration (Feature tests) des Actions.**
+
+### 8.1 Pourquoi pas de tests unitaires pour les Form Requests ?
+
+| Raison | Explication |
+|--------|-------------|
+| **Dépendance à Laravel** | Les Form Requests dépendent fortement de l'environnement HTTP |
+| **Tests d'intégration suffisants** | Les requêtes HTTP réelles testent la validation et la transformation |
+| **Éviter la duplication** | Les règles de validation sont testées via les endpoints réels |
+
+### 8.2 Où tester la validation ?
+
+```php
+// ✅ BON - Test d'intégration (Feature test)
+final class CreateUserActionTest extends TestCase
+{
+    use RefreshDatabase;
+    
+    public function test_validation_fails_when_email_is_missing(): void
+    {
+        $response = $this->postJson('/api/users', [
+            'name' => 'John Doe',
+            'password' => 'SecurePass123!',
+        ]);
+        
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['email']);
+    }
+    
+    public function test_action_receives_correct_record_on_success(): void
+    {
+        $response = $this->postJson('/api/users', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+            'password' => 'SecurePass123!',
+        ]);
+        
+        $response->assertStatus(201);
+        
+        $this->assertDatabaseHas('users', [
+            'name' => 'John Doe',
+            'email' => 'john@example.com',
+        ]);
+    }
+}
+```
+
+---
+
+## 9. Convention de nommage
+
+> **Le nom de la Form Request doit correspondre à la route et à l'Action associée.**
+
+| Route | Action | Form Request | Record |
+|-------|--------|--------------|--------|
+| `GET /users` | `ListUsersAction` | `ListUsersRequest` | `ListUsersRecord` |
+| `GET /users/{userId}` | `ShowUserAction` | `ShowUserRequest` | `ShowUserRecord` |
+| `POST /users` | `CreateUserAction` | `CreateUserRequest` | `CreateUserRecord` |
+| `PUT /users/{userId}` | `ReplaceUserAction` | `ReplaceUserRequest` | `ReplaceUserRecord` |
+| `PATCH /users/{userId}` | `UpdateUserAction` | `UpdateUserRequest` | `UpdateUserRecord` |
+| `DELETE /users/{userId}` | `DeleteUserAction` | `DeleteUserRequest` | `DeleteUserRecord` |
+
+```php
+// ✅ BON - Nom correspond à la route
+final class ListUsersRequest extends AbstractRequest { ... }
+final class ShowUserRequest extends AbstractRequest { ... }
+
+// ❌ MAUVAIS - Nom trop générique
+final class UserRequest extends AbstractRequest { ... }
+```
+
+---
+
+## 10. Méthodes INTERDITES (⚠️ STRICTEMENT INTERDITES)
 
 > **⚠️ Les méthodes `prepareForValidation()` et `after()` sont STRICTEMENT INTERDITES. Elles rendent l'application ambiguë et masquent la logique.**
 
-### 6.1 Pourquoi ces méthodes sont interdites ?
+### 10.1 Pourquoi ces méthodes sont interdites ?
 
 | Problème | Explication |
 |----------|-------------|
@@ -416,123 +465,69 @@ final class UserCanUpdateTask extends AbstractTask
 | **Violation SRP** | La Form Request ne doit que valider, pas modifier les données |
 | **Difficulté de test** | La logique est noyée dans la Form Request |
 
-### 6.2 Ce qui est INTERDIT
+### 10.2 Ce qu'il faut faire à la place
 
 ```php
-final class CreateUserRequest extends FormRequest
+// ✅ BON - La transformation est faite dans toRecord()
+final class CreateUserRequest extends AbstractRequest
 {
-    // ❌ STRICTEMENT INTERDIT
-    protected function prepareForValidation(): void
+    public function toRecord(): CreateUserRecord
     {
-        $this->merge([
-            'email' => strtolower(trim($this->email)),
-        ]);
-    }
-    
-    // ❌ STRICTEMENT INTERDIT
-    public function after(): array
-    {
-        return [
-            function (Validator $validator) {
-                if (User::where('email', $this->email)->exists()) {
-                    $validator->errors()->add('email', 'Email already taken.');
-                }
-            },
-        ];
-    }
-}
-```
-
-### 6.3 Ce qu'il faut faire à la place
-
-```php
-// ✅ BON - La transformation est faite dans l'Action lors de la création du Record
-final class CreateUserAction extends AbstractAction
-{
-    public function run(CreateUserRequest $request): JsonResponse
-    {
-        // Transformation explicite dans l'Action
-        $record = new CreateUserRecord(
-            name: $request->input('name'),
-            email: strtolower(trim($request->input('email'))),
-            password: $request->input('password'),
-            role: UserRole::from($request->input('role')),
+        return new CreateUserRecord(
+            name: trim($this->input('name')),
+            email: strtolower(trim($this->input('email'))),
         );
-        
-        // ...
     }
 }
 
 // ✅ BON - La validation complexe est faite dans l'Action via une Task
 final class CreateUserAction extends AbstractAction
 {
-    public function __construct(
-        private readonly ValidateEmailNotTakenTask $validateEmailNotTaken,
-    ) {}
-    
-    public function run(CreateUserRequest $request): JsonResponse
+    public function run(CreateUserRecord $record): JsonResponse
     {
-        $record = new CreateUserRecord(
-            name: $request->input('name'),
-            email: $request->input('email'),
-            password: $request->input('password'),
-            role: UserRole::from($request->input('role')),
-        );
-        
-        // Validation complexe via Task
         $this->validateEmailNotTaken->execute(new ValidateEmailNotTakenRecord(
             email: $record->email,
         ));
-        
         // ...
     }
 }
 ```
+
 ---
 
-## 7. Règles de validation complexes
+## 11. Règles de validation complexes
 
-> **Pour les règles de validation complexes, créez une `Rule` personnalisée ou utilisez une Task dans l'Action.**
-Voici un exemple plus complexe pour la validation d'un numéro de téléphone :
-
-### 7.1 Règle personnalisée (recommandée)
+> **Pour les règles de validation complexes, créez une `Rule` personnalisée.**
 
 ```php
 // App\Rules\ValidPhoneNumber.php
 final class ValidPhoneNumber implements Rule
 {
-    public function __construct(
-        private readonly ?string $code = null,
-    ) {}
+    public function __construct(private readonly ?string $code = null) {}
     
     public function passes(string $attribute, mixed $value): bool
     {
-        // Supprime les espaces, points, tirets
         $clean = preg_replace('/[\s\.\-]/', '', $value);
         
-        // Vérifie le format international ou local
         if ($this->code) {
             return (bool) preg_match('/^\+?' . preg_quote($this->code) . '\d{8,12}$/', $clean);
         }
         
-        // Format international standard (+XX...)
         return (bool) preg_match('/^\+\d{10,15}$/', $clean);
     }
     
     public function message(): string
     {
         $message = 'The :attribute must be a valid phone number';
-        
         if ($this->code) {
             $message .= " with country code {$this->code}";
         }
-        
         return $message . '.';
     }
 }
 
 // Form Request
-final class CreateUserRequest extends FormRequest
+final class CreateUserRequest extends AbstractRequest
 {
     public function rules(): array
     {
@@ -541,54 +536,26 @@ final class CreateUserRequest extends FormRequest
             'phone_fr' => ['required', new ValidPhoneNumber(code: '33')],
         ];
     }
-}
-```
-
-### 7.2 Validation via Task (pour les cas métier)
-
-```php
-// Task de validation
-final class ValidateEmailNotTakenTask extends AbstractTask
-{
-    public function __construct(
-        private readonly UserRepository $userRepository,
-    ) {}
     
-    public function execute(ValidateEmailNotTakenRecord $record): void
+    public function toRecord(): CreateUserRecord
     {
-        if ($this->userRepository->existsByEmail($record->email)) {
-            throw new ValidationException('Email already taken.');
-        }
-    }
-}
-
-// Dans l'Action
-final class CreateUserAction extends AbstractAction
-{
-    public function __construct(
-        private readonly ValidateEmailNotTakenTask $validateEmailNotTaken,
-    ) {}
-    
-    public function run(CreateUserRequest $request): JsonResponse
-    {
-        $this->validateEmailNotTaken->execute(new ValidateEmailNotTakenRecord(
-            email: $request->input('email'),
-        ));
-        
-        // ...
+        return new CreateUserRecord(
+            phone: $this->input('phone'),
+            phoneFr: $this->input('phone_fr'),
+        );
     }
 }
 ```
 
 ---
 
-## 8. Form Request pour les routes web et API
+## 12. Form Request pour les routes web et API
 
 > **⚠️ Une route web et sa route miroir API utilisent des Form Requests séparées, même si leurs règles sont identiques.**
 
 ```php
 // Web
-final class ListUsersRequest extends FormRequest
+final class ListUsersRequest extends AbstractRequest
 {
     public function rules(): array
     {
@@ -597,11 +564,20 @@ final class ListUsersRequest extends FormRequest
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
         ];
+    }
+    
+    public function toRecord(): ListUsersRecord
+    {
+        return new ListUsersRecord(
+            search: $this->input('search'),
+            page: $this->integer('page', 1),
+            perPage: $this->integer('per_page', 15),
+        );
     }
 }
 
 // API
-final class ListUsersRequest extends FormRequest
+final class ListUsersRequest extends AbstractRequest
 {
     public function rules(): array
     {
@@ -611,25 +587,35 @@ final class ListUsersRequest extends FormRequest
             'per_page' => 'nullable|integer|min:1|max:100',
         ];
     }
+    
+    public function toRecord(): ListUsersRecord
+    {
+        return new ListUsersRecord(
+            search: $this->input('search'),
+            page: $this->integer('page', 1),
+            perPage: $this->integer('per_page', 15),
+        );
+    }
 }
 ```
 
-### 8.1 Pourquoi des Form Requests séparées ?
+### 12.1 Pourquoi des Form Requests séparées ?
 
 | Raison | Explication |
 |--------|-------------|
 | **Évolution indépendante** | Les règles web peuvent diverger des règles API |
 | **Autorisation différente** | Web utilise session, API utilise token |
-| **Messages personnalisés** | Messages différents pour web et API |
+| **Métadonnées différentes** | Web n'a pas besoin d'API token, API n'a pas besoin de session |
 
 ---
 
-## 9. Organisation des dossiers
+## 13. Organisation des dossiers
 
 ```
 app/
 ├── Http/
 │   ├── Requests/
+│   │   ├── AbstractRequest.php
 │   │   ├── Web/
 │   │   │   ├── Dashboard/
 │   │   │   │   └── ShowDashboardRequest.php
@@ -649,16 +635,20 @@ app/
 │   │           ├── UpdateUserRequest.php
 │   │           └── DeleteUserRequest.php
 │   └── ...
-├── Rules/
-│   └── ValidUserRole.php
+├── Records/
+│   ├── ListUsersRecord.php
+│   ├── ShowUserRecord.php
+│   ├── CreateUserRecord.php
+│   ├── UpdateUserRecord.php
+│   └── DeleteUserRecord.php
 └── ...
 ```
 
 ---
 
-## 10. Exemples complets
+## 14. Exemples complets
 
-### 10.1 Form Request pour GET /users (liste)
+### 14.1 Form Request pour GET /users (liste)
 
 ```php
 <?php
@@ -667,10 +657,10 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Users;
 
-use App\Rules\ValidUserRole;
-use Illuminate\Foundation\Http\FormRequest;
+use AndyDefer\BestPractices\Http\Requests\AbstractRequest;
+use App\Records\ListUsersRecord;
 
-final class ListUsersRequest extends FormRequest
+final class ListUsersRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
@@ -681,18 +671,27 @@ final class ListUsersRequest extends FormRequest
     {
         return [
             'search' => 'nullable|string|max:255',
-            'role' => ['nullable', new ValidUserRole],
-            'status' => 'nullable|string|in:active,inactive,pending',
             'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|integer|min:1|max:100',
             'sort_by' => 'nullable|string|in:id,name,email,created_at',
             'sort_direction' => 'nullable|string|in:asc,desc',
         ];
     }
+    
+    public function toRecord(): ListUsersRecord
+    {
+        return new ListUsersRecord(
+            search: $this->input('search'),
+            page: $this->integer('page', 1),
+            perPage: $this->integer('per_page', 15),
+            sortBy: $this->input('sort_by', 'id'),
+            sortDirection: $this->input('sort_direction', 'asc'),
+        );
+    }
 }
 ```
 
-### 10.2 Form Request pour GET /users/{userId} (détail)
+### 14.2 Form Request pour GET /users/{userId} (détail)
 
 ```php
 <?php
@@ -701,14 +700,14 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Users;
 
-use Illuminate\Foundation\Http\FormRequest;
+use AndyDefer\BestPractices\Http\Requests\AbstractRequest;
+use App\Records\ShowUserRecord;
 
-final class ShowUserRequest extends FormRequest
+final class ShowUserRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
         $userId = (int) $this->route('userId');
-        
         return $this->user()->id === $userId || $this->user()->isAdmin();
     }
     
@@ -717,13 +716,24 @@ final class ShowUserRequest extends FormRequest
         return [
             'include_profile' => 'nullable|boolean',
             'include_orders' => 'nullable|boolean',
-            'include_addresses' => 'nullable|boolean',
         ];
+    }
+    
+    public function toRecord(): ShowUserRecord
+    {
+        return new ShowUserRecord(
+            id: (int) $this->route('userId'),
+            currentUserId: auth()->id(),
+            includeProfile: $this->boolean('include_profile'),
+            includeOrders: $this->boolean('include_orders'),
+            ip: $this->ip(),
+            userAgent: $this->userAgent(),
+        );
     }
 }
 ```
 
-### 10.3 Form Request pour POST /users (création)
+### 14.3 Form Request pour POST /users (création)
 
 ```php
 <?php
@@ -732,10 +742,11 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Users;
 
+use AndyDefer\BestPractices\Http\Requests\AbstractRequest;
+use App\Records\CreateUserRecord;
 use App\Rules\ValidUserRole;
-use Illuminate\Foundation\Http\FormRequest;
 
-final class CreateUserRequest extends FormRequest
+final class CreateUserRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
@@ -752,10 +763,23 @@ final class CreateUserRequest extends FormRequest
             'is_active' => 'nullable|boolean',
         ];
     }
+    
+    public function toRecord(): CreateUserRecord
+    {
+        return new CreateUserRecord(
+            name: trim($this->input('name')),
+            email: strtolower(trim($this->input('email'))),
+            password: $this->input('password'),
+            role: UserRole::from($this->input('role')),
+            isActive: $this->boolean('is_active', true),
+            createdBy: auth()->id(),
+            ip: $this->ip(),
+        );
+    }
 }
 ```
 
-### 10.4 Form Request pour PATCH /users/{userId} (mise à jour partielle)
+### 14.4 Form Request pour PATCH /users/{userId} (mise à jour partielle)
 
 ```php
 <?php
@@ -764,15 +788,15 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Users;
 
+use AndyDefer\BestPractices\Http\Requests\AbstractRequest;
+use App\Records\UpdateUserRecord;
 use App\Rules\ValidUserRole;
-use Illuminate\Foundation\Http\FormRequest;
 
-final class UpdateUserRequest extends FormRequest
+final class UpdateUserRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
         $userId = (int) $this->route('userId');
-        
         return $this->user()->id === $userId || $this->user()->role->isAdmin();
     }
     
@@ -785,10 +809,22 @@ final class UpdateUserRequest extends FormRequest
             'is_active' => 'nullable|boolean',
         ];
     }
+    
+    public function toRecord(): UpdateUserRecord
+    {
+        return new UpdateUserRecord(
+            userId: (int) $this->route('userId'),
+            currentUserId: auth()->id(),
+            name: $this->input('name'),
+            email: $this->input('email') ? strtolower(trim($this->input('email'))) : null,
+            role: $this->input('role') ? UserRole::from($this->input('role')) : null,
+            isActive: $this->boolean('is_active'),
+        );
+    }
 }
 ```
 
-### 10.5 Form Request pour DELETE /users/{userId} (suppression)
+### 14.5 Form Request pour DELETE /users/{userId} (suppression)
 
 ```php
 <?php
@@ -797,14 +833,14 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Api\Users;
 
-use Illuminate\Foundation\Http\FormRequest;
+use AndyDefer\BestPractices\Http\Requests\AbstractRequest;
+use App\Records\DeleteUserRecord;
 
-final class DeleteUserRequest extends FormRequest
+final class DeleteUserRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
         $userId = (int) $this->route('userId');
-        
         return $this->user()->status->isAdmin() && $this->user()->id !== $userId;
     }
     
@@ -814,80 +850,49 @@ final class DeleteUserRequest extends FormRequest
             'hard_delete' => 'nullable|boolean',
         ];
     }
-}
-```
-
-### 10.6 Form Request avec Task dans authorize (cas complexe)
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace App\Http\Requests\Api\Users;
-
-use App\Records\UserCanUpdateRecord;
-use App\Tasks\UserCanUpdateTask;
-use Illuminate\Foundation\Http\FormRequest;
-
-final class UpdateUserRequest extends FormRequest
-{
-    public function __construct(
-        private readonly UserCanUpdateTask $userCanUpdate,
-    ) {
-        parent::__construct();
-    }
     
-    public function authorize(): bool
+    public function toRecord(): DeleteUserRecord
     {
-        $userId = (int) $this->route('userId');
-        
-        // Délégation à une Task (sans effet de bord)
-        return $this->userCanUpdate->execute(new UserCanUpdateRecord(
-            currentUserId: $this->user()->id,
-            targetUserId: $userId,
-        ));
-    }
-    
-    public function rules(): array
-    {
-        return [
-            'name' => 'nullable|string|max:255',
-            'email' => 'nullable|email|unique:users,email,' . $this->route('userId'),
-        ];
+        return new DeleteUserRecord(
+            userId: (int) $this->route('userId'),
+            currentUserId: auth()->id(),
+            hardDelete: $this->boolean('hard_delete', false),
+        );
     }
 }
 ```
 
 ---
 
-## 11. Récapitulatif des contraintes
+## 15. Récapitulatif des contraintes
 
 | Contrainte | Règle |
 |------------|-------|
+| **Héritage** | ✅ DOIT étendre `AbstractRequest` |
+| **Méthode toRecord()** | ✅ DOIT être implémentée (obligatoire) |
 | **Nommage** | `{Action}Request` (ex: `ListUsersRequest`) |
 | **Route unique** | Une Form Request = une route |
 | **Web vs API** | Form Requests séparées |
-| **Paramètre URL** | ❌ Non validé par Form Request (typé dans l'Action) |
+| **Paramètre URL** | ❌ Non dans les règles, intégré dans `toRecord()` via `$this->route()` |
 | **Paramètre requête** | ✅ Validé par Form Request (`snake_case`) |
 | **`prepareForValidation()`** | ❌ STRICTEMENT INTERDIT |
 | **`after()`** | ❌ STRICTEMENT INTERDIT |
 | **`authorize()`** | Conditions simples uniquement (pas d'effets de bord) |
-| **Validation complexe** | Via `Rule` personnalisée ou Task dans l'Action |
+| **Validation complexe** | Via `Rule` personnalisée |
+| **Tests unitaires** | ❌ Pas de tests unitaires pour les Form Requests |
 
 ---
 
-## 12. Règle d'or
+## 16. Règle d'or
 
-> **Une Form Request ne fait que valider les paramètres de requête. Pas de transformation, pas de validation complexe, pas d'effets de bord. La logique est dans l'Action.**
+> **Une Form Request ne fait que valider les paramètres et créer un Record. Pas de transformation complexe, pas de validation métier, pas d'effets de bord. L'Action reçoit un Record et ne connaît pas la Request. On ne teste pas les Form Requests unitairement : la validation est vérifiée dans les tests d'intégration des Actions.**
 
 ```php
 // La Form Request parfaite
-final class PerfectRequest extends FormRequest
+final class PerfectRequest extends AbstractRequest
 {
     public function authorize(): bool
     {
-        // Simple condition
         return $this->user()->status->isAdmin();
     }
     
@@ -898,23 +903,30 @@ final class PerfectRequest extends FormRequest
             'field_two' => 'nullable|integer|min:1',
         ];
     }
-}
-
-// La logique de transformation et validation complexe est dans l'Action
-final class PerfectAction extends AbstractAction
-{
-    public function __construct(
-        private readonly SomeValidationTask $validation,
-    ) {}
     
-    public function run(PerfectRequest $request): JsonResponse
+    public function toRecord(): PerfectRecord
     {
-        // Transformation explicite
-        $value = strtolower(trim($request->input('field_one')));
-        
-        // Validation complexe
-        $this->validation->execute($value);
-        
-        // ...
+        return new PerfectRecord(
+            fieldOne: $this->input('field_one'),
+            fieldTwo: $this->integer('field_two'),
+            currentUserId: auth()->id(),
+            ip: $this->ip(),
+        );
     }
 }
+
+// L'Action parfaite (ne connaît pas la Request)
+final class PerfectAction extends AbstractAction
+{
+    public function run(PerfectRecord $record): JsonResponse
+    {
+        $result = $this->service->execute($record);
+        return $this->json($result);
+    }
+}
+
+// La route
+Route::get('/perfect', function (PerfectRequest $request, PerfectAction $action) {
+    return $action->run($request->toRecord());
+});
+```

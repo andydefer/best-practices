@@ -9,8 +9,12 @@ use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserGrade;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 
-final class TestUserData extends AbstractData
+final class TestFullUserData extends AbstractData
 {
+    /**
+     * @param  array<int, TestProductData>  $products
+     * @param  array<int, string>  $tags
+     */
     public function __construct(
         public readonly string $id,
         public readonly string $name,
@@ -21,5 +25,8 @@ final class TestUserData extends AbstractData
         public readonly ?string $emailVerifiedAt = null,
         public readonly array $tags = [],
         public readonly string $createdAt,
+        public readonly array $products = [],
+        public readonly ?TestProductData $featuredProduct = null,
+        public readonly ?self $child = null,
     ) {}
 }

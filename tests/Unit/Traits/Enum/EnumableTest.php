@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace AndyDefer\BestPractices\Tests\Unit\Traits\Enum;
 
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestBackedIntEnum;
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestBackedStringEnum;
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestPureEnum;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserGrade;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 use AndyDefer\BestPractices\Tests\TestCase;
 
 final class EnumableTest extends TestCase
@@ -15,82 +15,82 @@ final class EnumableTest extends TestCase
     {
         // Arrange: Use a backed string enum fixture
         // Act: Call the values method on the enum
-        $values = TestBackedStringEnum::values();
+        $values = TestUserRole::values();
 
         // Assert: Verify all backing string values are returned correctly
-        $this->assertSame(['active', 'inactive', 'pending'], $values);
+        $this->assertSame(['admin', 'user', 'guest'], $values);
     }
 
     public function test_values_returns_backing_values_for_backed_int_enum(): void
     {
         // Arrange: Use a backed int enum fixture
         // Act: Call the values method on the enum
-        $values = TestBackedIntEnum::values();
+        $values = TestUserGrade::values();
 
         // Assert: Verify all backing int values are returned correctly
-        $this->assertSame([1, 2, 3], $values);
+        $this->assertSame([1, 2, 3, 4], $values);
     }
 
     public function test_values_returns_case_names_for_pure_enum(): void
     {
         // Arrange: Use a pure enum fixture (no backing values)
         // Act: Call the values method on the enum
-        $values = TestPureEnum::values();
+        $values = TestUserStatus::values();
 
         // Assert: Verify case names are returned as values since there's no backing value
-        $this->assertSame(['ADMIN', 'USER', 'GUEST'], $values);
+        $this->assertSame(['ACTIVE', 'INACTIVE', 'SUSPENDED'], $values);
     }
 
     public function test_names_returns_all_case_names_for_backed_string_enum(): void
     {
         // Arrange: Use a backed string enum fixture
         // Act: Call the names method on the enum
-        $names = TestBackedStringEnum::names();
+        $names = TestUserRole::names();
 
         // Assert: Verify all case names are returned in UPPER_CASE format
-        $this->assertSame(['ACTIVE', 'INACTIVE', 'PENDING'], $names);
+        $this->assertSame(['ADMIN', 'USER', 'GUEST'], $names);
     }
 
     public function test_names_returns_all_case_names_for_backed_int_enum(): void
     {
         // Arrange: Use a backed int enum fixture
         // Act: Call the names method on the enum
-        $names = TestBackedIntEnum::names();
+        $names = TestUserGrade::names();
 
         // Assert: Verify all case names are returned in UPPER_CASE format
-        $this->assertSame(['ONE', 'TWO', 'THREE'], $names);
+        $this->assertSame(['BRONZE', 'SILVER', 'GOLD', 'PLATINUM'], $names);
     }
 
     public function test_names_returns_all_case_names_for_pure_enum(): void
     {
         // Arrange: Use a pure enum fixture
         // Act: Call the names method on the enum
-        $names = TestPureEnum::names();
+        $names = TestUserStatus::names();
 
         // Assert: Verify all case names are returned in UPPER_CASE format
-        $this->assertSame(['ADMIN', 'USER', 'GUEST'], $names);
+        $this->assertSame(['ACTIVE', 'INACTIVE', 'SUSPENDED'], $names);
     }
 
     public function test_types_in_order_returns_all_cases_in_definition_order(): void
     {
         // Arrange: Use a backed string enum fixture with specific definition order
         // Act: Call the typesInOrder method on the enum
-        $cases = TestBackedStringEnum::typesInOrder();
+        $cases = TestUserRole::typesInOrder();
 
         // Assert: Verify cases are returned in the same order they were defined
         $this->assertCount(3, $cases);
-        $this->assertSame(TestBackedStringEnum::ACTIVE, $cases[0]);
-        $this->assertSame(TestBackedStringEnum::INACTIVE, $cases[1]);
-        $this->assertSame(TestBackedStringEnum::PENDING, $cases[2]);
+        $this->assertSame(TestUserRole::ADMIN, $cases[0]);
+        $this->assertSame(TestUserRole::USER, $cases[1]);
+        $this->assertSame(TestUserRole::GUEST, $cases[2]);
     }
 
     public function test_is_valid_returns_true_for_existing_backed_string_value(): void
     {
         // Arrange: Define a valid backing string value that exists in the enum
-        $validValue = 'active';
+        $validValue = 'admin';
 
         // Act: Call isValid with the existing value
-        $result = TestBackedStringEnum::isValid($validValue);
+        $result = TestUserRole::isValid($validValue);
 
         // Assert: Verify the method returns true for existing values
         $this->assertTrue($result);
@@ -102,7 +102,7 @@ final class EnumableTest extends TestCase
         $invalidValue = 'unknown';
 
         // Act: Call isValid with the non-existing value
-        $result = TestBackedStringEnum::isValid($invalidValue);
+        $result = TestUserRole::isValid($invalidValue);
 
         // Assert: Verify the method returns false for non-existing values
         $this->assertFalse($result);
@@ -114,7 +114,7 @@ final class EnumableTest extends TestCase
         $validValue = 2;
 
         // Act: Call isValid with the existing value
-        $result = TestBackedIntEnum::isValid($validValue);
+        $result = TestUserGrade::isValid($validValue);
 
         // Assert: Verify the method returns true for existing values
         $this->assertTrue($result);
@@ -126,7 +126,7 @@ final class EnumableTest extends TestCase
         $invalidValue = 99;
 
         // Act: Call isValid with the non-existing value
-        $result = TestBackedIntEnum::isValid($invalidValue);
+        $result = TestUserGrade::isValid($invalidValue);
 
         // Assert: Verify the method returns false for non-existing values
         $this->assertFalse($result);
@@ -135,10 +135,10 @@ final class EnumableTest extends TestCase
     public function test_is_valid_returns_true_for_existing_pure_enum_case_name(): void
     {
         // Arrange: Define a valid case name from the pure enum
-        $validValue = 'ADMIN';
+        $validValue = 'ACTIVE';
 
         // Act: Call isValid with the existing case name
-        $result = TestPureEnum::isValid($validValue);
+        $result = TestUserStatus::isValid($validValue);
 
         // Assert: Verify the method returns true for existing case names
         $this->assertTrue($result);
@@ -150,7 +150,7 @@ final class EnumableTest extends TestCase
         $invalidValue = 'SUPER_ADMIN';
 
         // Act: Call isValid with the non-existing case name
-        $result = TestPureEnum::isValid($invalidValue);
+        $result = TestUserStatus::isValid($invalidValue);
 
         // Assert: Verify the method returns false for non-existing case names
         $this->assertFalse($result);
@@ -159,13 +159,13 @@ final class EnumableTest extends TestCase
     public function test_from_value_returns_enum_case_for_existing_backed_string_value(): void
     {
         // Arrange: Define a valid backing string value
-        $validValue = 'active';
+        $validValue = 'admin';
 
         // Act: Call fromValue with the existing value
-        $result = TestBackedStringEnum::fromValue($validValue);
+        $result = TestUserRole::fromValue($validValue);
 
         // Assert: Verify the correct enum case is returned
-        $this->assertSame(TestBackedStringEnum::ACTIVE, $result);
+        $this->assertSame(TestUserRole::ADMIN, $result);
     }
 
     public function test_from_value_returns_null_for_non_existing_backed_string_value(): void
@@ -174,7 +174,7 @@ final class EnumableTest extends TestCase
         $invalidValue = 'unknown';
 
         // Act: Call fromValue with the non-existing value
-        $result = TestBackedStringEnum::fromValue($invalidValue);
+        $result = TestUserRole::fromValue($invalidValue);
 
         // Assert: Verify null is returned for non-existing values
         $this->assertNull($result);
@@ -186,10 +186,10 @@ final class EnumableTest extends TestCase
         $validValue = 2;
 
         // Act: Call fromValue with the existing value
-        $result = TestBackedIntEnum::fromValue($validValue);
+        $result = TestUserGrade::fromValue($validValue);
 
         // Assert: Verify the correct enum case is returned
-        $this->assertSame(TestBackedIntEnum::TWO, $result);
+        $this->assertSame(TestUserGrade::SILVER, $result);
     }
 
     public function test_from_value_returns_null_for_non_existing_backed_int_value(): void
@@ -198,7 +198,7 @@ final class EnumableTest extends TestCase
         $invalidValue = 99;
 
         // Act: Call fromValue with the non-existing value
-        $result = TestBackedIntEnum::fromValue($invalidValue);
+        $result = TestUserGrade::fromValue($invalidValue);
 
         // Assert: Verify null is returned for non-existing values
         $this->assertNull($result);
@@ -207,13 +207,13 @@ final class EnumableTest extends TestCase
     public function test_from_value_returns_enum_case_for_existing_pure_enum_case_name(): void
     {
         // Arrange: Define a valid case name from the pure enum
-        $validValue = 'ADMIN';
+        $validValue = 'ACTIVE';
 
         // Act: Call fromValue with the existing case name
-        $result = TestPureEnum::fromValue($validValue);
+        $result = TestUserStatus::fromValue($validValue);
 
         // Assert: Verify the correct enum case is returned for pure enums by name
-        $this->assertSame(TestPureEnum::ADMIN, $result);
+        $this->assertSame(TestUserStatus::ACTIVE, $result);
     }
 
     public function test_from_value_returns_null_for_non_existing_pure_enum_case_name(): void
@@ -222,7 +222,7 @@ final class EnumableTest extends TestCase
         $invalidValue = 'SUPER_ADMIN';
 
         // Act: Call fromValue with the non-existing case name
-        $result = TestPureEnum::fromValue($invalidValue);
+        $result = TestUserStatus::fromValue($invalidValue);
 
         // Assert: Verify null is returned for non-existing case names
         $this->assertNull($result);

@@ -6,11 +6,11 @@ namespace AndyDefer\BestPractices\Tests\Fixtures\Enums;
 
 use AndyDefer\BestPractices\Traits\Enum\Enumable;
 
-enum TestBackedIntEnum: int
+enum TestUserStatus
 {
     use Enumable;
 
-    case ONE = 1;
-    case TWO = 2;
-    case THREE = 3;
+    case ACTIVE;
+    case INACTIVE;
+    case SUSPENDED;
 }

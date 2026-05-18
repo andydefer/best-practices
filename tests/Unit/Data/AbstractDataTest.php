@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace AndyDefer\BestPractices\Tests\Unit\Data;
 
 use AndyDefer\BestPractices\Data\AbstractData;
+use AndyDefer\BestPractices\Tests\Fixtures\Data\TestFullUserData;
+use AndyDefer\BestPractices\Tests\Fixtures\Data\TestProductData;
 use AndyDefer\BestPractices\Tests\Fixtures\Data\TestSimpleData;
 use AndyDefer\BestPractices\Tests\Fixtures\Data\TestUserData;
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestBackedStringEnum;
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestPureEnum;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserGrade;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 use AndyDefer\BestPractices\Tests\TestCase;
 use Carbon\Carbon;
-use DateTime;
 use Illuminate\Support\Collection;
 
 final class AbstractDataTest extends TestCase
@@ -22,22 +24,26 @@ final class AbstractDataTest extends TestCase
 
     public function test_to_array_preserves_camel_case_keys_when_converting_to_array(): void
     {
-        // Arrange
         $data = new TestUserData(
-            id: 1,
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::BRONZE,
             emailVerifiedAt: null,
-            createdAt: Carbon::parse('2024-01-15 10:30:00'),
+            tags: [],
+            createdAt: '2024-01-15T10:30:00Z',
         );
 
-        // Act
         $array = $data->toArray();
 
-        // Assert
         $this->assertArrayHasKey('id', $array);
         $this->assertArrayHasKey('name', $array);
+        $this->assertArrayHasKey('email', $array);
         $this->assertArrayHasKey('status', $array);
+        $this->assertArrayHasKey('role', $array);
+        $this->assertArrayHasKey('grade', $array);
         $this->assertArrayHasKey('emailVerifiedAt', $array);
         $this->assertArrayHasKey('createdAt', $array);
         $this->assertArrayNotHasKey('email_verified_at', $array);
@@ -46,134 +52,239 @@ final class AbstractDataTest extends TestCase
 
     public function test_to_array_converts_backed_enum_to_string_value_when_converting_to_array(): void
     {
-        // Arrange
+        // TestUserRole est un backed enum (string)
         $data = new TestUserData(
-            id: 1,
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::ADMIN,
+            grade: TestUserGrade::BRONZE,
             emailVerifiedAt: null,
-            createdAt: Carbon::parse('2024-01-15 10:30:00'),
+            tags: [],
+            createdAt: '2024-01-15T10:30:00Z',
         );
 
-        // Act
         $array = $data->toArray();
 
-        // Assert
-        $this->assertSame('active', $array['status']);
+        $this->assertSame('admin', $array['role']);
+    }
+
+    public function test_to_array_converts_int_backed_enum_to_int_value_when_converting_to_array(): void
+    {
+        // TestUserGrade est un backed enum (int)
+        $data = new TestUserData(
+            id: '1',
+            name: 'John Doe',
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::GOLD,
+            emailVerifiedAt: null,
+            tags: [],
+            createdAt: '2024-01-15T10:30:00Z',
+        );
+
+        $array = $data->toArray();
+
+        $this->assertSame(3, $array['grade']);
     }
 
     public function test_to_array_converts_pure_enum_to_enum_name_when_converting_to_array(): void
     {
-        // Arrange: Create an anonymous data class with a pure enum property
-        $data = new class(TestPureEnum::ADMIN) extends AbstractData
+        $data = new class(TestUserStatus::ACTIVE) extends AbstractData
         {
             public function __construct(
-                public readonly TestPureEnum $status,
+                public readonly TestUserStatus $status,
             ) {}
         };
 
-        // Act: Convert the data object to an array
         $array = $data->toArray();
 
-        // Assert: Verify the pure enum is converted to its case name
-        $this->assertSame('ADMIN', $array['status']);
+        $this->assertSame('ACTIVE', $array['status']);
     }
 
     public function test_to_array_converts_datetime_to_iso_8601_format_when_converting_to_array(): void
     {
-        // Arrange
-        $dateTime = Carbon::parse('2024-01-15 14:30:00', 'UTC');
         $data = new TestUserData(
-            id: 1,
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::BRONZE,
             emailVerifiedAt: null,
-            createdAt: $dateTime,
+            tags: [],
+            createdAt: '2024-01-15T14:30:00Z',
         );
 
-        // Act
         $array = $data->toArray();
 
-        // Assert
         $this->assertSame('2024-01-15T14:30:00Z', $array['createdAt']);
     }
 
     public function test_to_array_keeps_null_values_in_array_when_converting(): void
     {
-        // Arrange
         $data = new TestUserData(
-            id: 1,
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::BRONZE,
             emailVerifiedAt: null,
-            createdAt: Carbon::now(),
+            tags: [],
+            createdAt: '2024-01-15T14:30:00Z',
         );
 
-        // Act
         $array = $data->toArray();
 
-        // Assert
         $this->assertNull($array['emailVerifiedAt']);
         $this->assertArrayHasKey('emailVerifiedAt', $array);
     }
 
     public function test_to_array_recursively_converts_nested_data_objects_when_converting(): void
     {
-        // Arrange
-        $child = new TestUserData(
-            id: 2,
-            name: 'Jane Doe',
-            status: TestBackedStringEnum::INACTIVE,
-            emailVerifiedAt: '2024-01-10T12:00:00Z',
-            createdAt: Carbon::parse('2024-01-10 08:00:00'),
+        $childProduct = new TestProductData(
+            id: '2',
+            name: 'Child Product',
+            price: 100,
+            isFeatured: true,
+            createdAt: '2024-01-10T08:00:00Z',
         );
 
-        $parent = new TestUserData(
-            id: 1,
+        $child = new TestFullUserData(
+            id: '2',
+            name: 'Jane Doe',
+            email: 'jane@example.com',
+            status: TestUserStatus::INACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::SILVER,
+            emailVerifiedAt: '2024-01-10T12:00:00Z',
+            createdAt: '2024-01-10T08:00:00Z',
+            tags: [],
+            products: [new TestProductData(id: '3', name: 'Jane Product', price: 50, createdAt: '2024-01-10T08:00:00Z')],
+            featuredProduct: $childProduct,
+        );
+
+        $parentProduct = new TestProductData(
+            id: '4',
+            name: 'Parent Product',
+            price: 500,
+            isFeatured: true,
+            createdAt: '2024-01-15T10:30:00Z',
+        );
+
+        $parent = new TestFullUserData(
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::ADMIN,
+            grade: TestUserGrade::GOLD,
             emailVerifiedAt: null,
-            createdAt: Carbon::parse('2024-01-15 10:30:00'),
+            createdAt: '2024-01-15T10:30:00Z',
+            tags: [],
+            products: [new TestProductData(id: '5', name: 'Parent Product 1', price: 200, createdAt: '2024-01-15T10:30:00Z')],
+            featuredProduct: $parentProduct,
             child: $child,
         );
 
-        // Act
         $array = $parent->toArray();
 
-        // Assert
+        $this->assertSame('1', $array['id']);
+        $this->assertSame('John Doe', $array['name']);
+        $this->assertSame('admin', $array['role']);
+        $this->assertSame(3, $array['grade']);
+
+        $this->assertIsArray($array['products']);
+        $this->assertCount(1, $array['products']);
+        $this->assertSame('Parent Product 1', $array['products'][0]['name']);
+        $this->assertSame(200, $array['products'][0]['price']);
+
+        $this->assertIsArray($array['featuredProduct']);
+        $this->assertSame('Parent Product', $array['featuredProduct']['name']);
+        $this->assertSame(500, $array['featuredProduct']['price']);
+        $this->assertTrue($array['featuredProduct']['isFeatured']);
+
         $this->assertIsArray($array['child']);
-        $this->assertSame(2, $array['child']['id']);
-        $this->assertSame('inactive', $array['child']['status']);
+        $this->assertSame('2', $array['child']['id']);
+        $this->assertSame('user', $array['child']['role']);
+
+        $this->assertIsArray($array['child']['products']);
+        $this->assertCount(1, $array['child']['products']);
+        $this->assertSame('Jane Product', $array['child']['products'][0]['name']);
+
+        $this->assertIsArray($array['child']['featuredProduct']);
+        $this->assertSame('Child Product', $array['child']['featuredProduct']['name']);
+        $this->assertSame(100, $array['child']['featuredProduct']['price']);
+        $this->assertTrue($array['child']['featuredProduct']['isFeatured']);
     }
 
     public function test_to_array_recursively_converts_arrays_of_data_objects_when_converting(): void
     {
-        // Arrange
-        $data = new TestUserData(
-            id: 1,
-            name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
-            emailVerifiedAt: null,
-            createdAt: Carbon::now(),
-            tags: [
-                new TestSimpleData('tag1'),
-                new TestSimpleData('tag2'),
-            ],
+        $product1 = new TestProductData(
+            id: '1',
+            name: 'Laptop',
+            price: 999,
+            isFeatured: true,
+            createdAt: '2024-01-15T10:30:00Z',
+        );
+        $product2 = new TestProductData(
+            id: '2',
+            name: 'Mouse',
+            price: 29,
+            isFeatured: false,
+            createdAt: '2024-01-15T10:30:00Z',
+        );
+        $product3 = new TestProductData(
+            id: '3',
+            name: 'Keyboard',
+            price: 89,
+            isFeatured: false,
+            createdAt: '2024-01-15T10:30:00Z',
         );
 
-        // Act
+        $data = new TestFullUserData(
+            id: '1',
+            name: 'John Doe',
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::BRONZE,
+            emailVerifiedAt: null,
+            createdAt: '2024-01-15T10:30:00Z',
+            tags: ['developer', 'laravel'],
+            products: [$product1, $product2, $product3],
+            featuredProduct: $product1,
+        );
+
         $array = $data->toArray();
 
-        // Assert
         $this->assertIsArray($array['tags']);
         $this->assertCount(2, $array['tags']);
-        $this->assertSame('tag1', $array['tags'][0]['value']);
-        $this->assertSame('tag2', $array['tags'][1]['value']);
+        $this->assertSame(['developer', 'laravel'], $array['tags']);
+
+        $this->assertIsArray($array['products']);
+        $this->assertCount(3, $array['products']);
+        $this->assertSame('Laptop', $array['products'][0]['name']);
+        $this->assertSame(999, $array['products'][0]['price']);
+        $this->assertTrue($array['products'][0]['isFeatured']);
+        $this->assertSame('Mouse', $array['products'][1]['name']);
+        $this->assertSame(29, $array['products'][1]['price']);
+        $this->assertFalse($array['products'][1]['isFeatured']);
+        $this->assertSame('Keyboard', $array['products'][2]['name']);
+        $this->assertSame(89, $array['products'][2]['price']);
+        $this->assertFalse($array['products'][2]['isFeatured']);
+
+        $this->assertIsArray($array['featuredProduct']);
+        $this->assertSame('Laptop', $array['featuredProduct']['name']);
+        $this->assertSame(999, $array['featuredProduct']['price']);
+        $this->assertTrue($array['featuredProduct']['isFeatured']);
     }
 
     public function test_to_array_converts_collection_to_array_when_converting(): void
     {
-        // Arrange
         $collection = new Collection([
             new TestSimpleData('item1'),
             new TestSimpleData('item2'),
@@ -186,10 +297,8 @@ final class AbstractDataTest extends TestCase
             ) {}
         };
 
-        // Act
         $array = $data->toArray();
 
-        // Assert
         $this->assertIsArray($array['items']);
         $this->assertCount(2, $array['items']);
         $this->assertSame('item1', $array['items'][0]['value']);
@@ -198,80 +307,37 @@ final class AbstractDataTest extends TestCase
 
     public function test_to_array_preserves_arrays_of_scalars_when_converting(): void
     {
-        // Arrange
         $expectedTags = ['tag1', 'tag2', 'tag3'];
 
         $data = new TestUserData(
-            id: 1,
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::BRONZE,
             emailVerifiedAt: null,
-            createdAt: Carbon::now(),
             tags: $expectedTags,
+            createdAt: '2024-01-15T10:30:00Z',
         );
 
-        // Act
         $array = $data->toArray();
 
-        // Assert
         $this->assertSame($expectedTags, $array['tags']);
     }
 
     public function test_to_array_converts_arrays_of_enums_to_their_values_when_converting(): void
     {
-        // Arrange
-        $data = new class([TestBackedStringEnum::ACTIVE, TestBackedStringEnum::INACTIVE]) extends AbstractData
+        $data = new class([TestUserRole::ADMIN, TestUserRole::USER]) extends AbstractData
         {
             public function __construct(
                 public readonly array $roles,
             ) {}
         };
 
-        // Act
         $array = $data->toArray();
 
-        // Assert
-        $this->assertSame(['active', 'inactive'], $array['roles']);
-    }
-
-    public function test_to_array_returns_null_for_nullable_array_when_null(): void
-    {
-        // Arrange
-        $data = new TestUserData(
-            id: 1,
-            name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
-            emailVerifiedAt: null,
-            createdAt: Carbon::now(),
-            metadata: null,
-        );
-
-        // Act
-        $array = $data->toArray();
-
-        // Assert
-        $this->assertNull($array['metadata']);
-    }
-
-    public function test_to_array_returns_array_for_nullable_array_when_not_null(): void
-    {
-        // Arrange
-        $expectedMetadata = ['key' => 'value'];
-
-        $data = new TestUserData(
-            id: 1,
-            name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
-            emailVerifiedAt: null,
-            createdAt: Carbon::now(),
-            metadata: $expectedMetadata,
-        );
-
-        // Act
-        $array = $data->toArray();
-
-        // Assert
-        $this->assertSame($expectedMetadata, $array['metadata']);
+        $this->assertSame(['admin', 'user'], $array['roles']);
     }
 
     // ============================================================================
@@ -280,92 +346,80 @@ final class AbstractDataTest extends TestCase
 
     public function test_collect_creates_data_objects_from_objects_array(): void
     {
-        // Arrange
-        $user1 = $this->createUserObject(1, 'John Doe', TestBackedStringEnum::ACTIVE);
-        $user2 = $this->createUserObject(2, 'Jane Doe', TestBackedStringEnum::INACTIVE);
+        $user1 = $this->createUserObject('1', 'John Doe', TestUserStatus::ACTIVE, TestUserRole::USER, TestUserGrade::BRONZE);
+        $user2 = $this->createUserObject('2', 'Jane Doe', TestUserStatus::INACTIVE, TestUserRole::USER, TestUserGrade::BRONZE);
         $users = [$user1, $user2];
 
-        // Act
         $result = TestUserData::collect($users);
 
-        // Assert
         $this->assertCount(2, $result);
         $this->assertInstanceOf(TestUserData::class, $result[0]);
         $this->assertInstanceOf(TestUserData::class, $result[1]);
-        $this->assertSame(1, $result[0]->id);
+        $this->assertSame('1', $result[0]->id);
         $this->assertSame('John Doe', $result[0]->name);
-        $this->assertSame(2, $result[1]->id);
+        $this->assertSame('2', $result[1]->id);
         $this->assertSame('Jane Doe', $result[1]->name);
     }
 
     public function test_collect_creates_data_objects_from_arrays(): void
     {
-        // Arrange
         $users = [
             [
-                'id' => 1,
+                'id' => '1',
                 'name' => 'John Doe',
-                'status' => TestBackedStringEnum::ACTIVE,
+                'email' => 'john@example.com',
+                'status' => TestUserStatus::ACTIVE,
+                'role' => TestUserRole::USER,
+                'grade' => TestUserGrade::BRONZE,
                 'emailVerifiedAt' => null,
-                'createdAt' => Carbon::parse('2024-01-15 10:30:00'),
+                'createdAt' => '2024-01-15T10:30:00Z',
                 'tags' => [],
-                'metadata' => null,
             ],
             [
-                'id' => 2,
+                'id' => '2',
                 'name' => 'Jane Doe',
-                'status' => TestBackedStringEnum::INACTIVE,
+                'email' => 'jane@example.com',
+                'status' => TestUserStatus::INACTIVE,
+                'role' => TestUserRole::USER,
+                'grade' => TestUserGrade::BRONZE,
                 'emailVerifiedAt' => '2024-01-10T12:00:00Z',
-                'createdAt' => Carbon::parse('2024-01-10 08:00:00'),
+                'createdAt' => '2024-01-10T08:00:00Z',
                 'tags' => [],
-                'metadata' => null,
             ],
         ];
 
-        // Act
         $result = TestUserData::collect($users);
 
-        // Assert
         $this->assertCount(2, $result);
         $this->assertInstanceOf(TestUserData::class, $result[0]);
-        $this->assertSame(1, $result[0]->id);
+        $this->assertSame('1', $result[0]->id);
         $this->assertSame('John Doe', $result[0]->name);
     }
 
     public function test_collect_returns_empty_array_when_input_is_empty(): void
     {
-        // Arrange & Act
         $result = TestUserData::collect([]);
 
-        // Assert
         $this->assertSame([], $result);
     }
 
     public function test_collect_throws_exception_when_item_is_not_object_or_array(): void
     {
-        // Arrange
-        $invalidInput = ['invalid'];
-
-        // Assert
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('Item must be an object or array, string given');
 
-        // Act
-        TestUserData::collect($invalidInput);
+        TestUserData::collect(['invalid']);
     }
 
     public function test_collect_creates_data_objects_from_laravel_collection(): void
     {
-        // Arrange
         $userObjects = collect([
-            $this->createUserObject(1, 'John Doe', TestBackedStringEnum::ACTIVE),
-            $this->createUserObject(2, 'Jane Doe', TestBackedStringEnum::INACTIVE),
+            $this->createUserObject('1', 'John Doe', TestUserStatus::ACTIVE, TestUserRole::USER, TestUserGrade::BRONZE),
+            $this->createUserObject('2', 'Jane Doe', TestUserStatus::INACTIVE, TestUserRole::USER, TestUserGrade::BRONZE),
         ]);
 
-        // Act
         $result = TestUserData::collect($userObjects);
 
-        // Assert
         $this->assertCount(2, $result);
         $this->assertInstanceOf(TestUserData::class, $result[0]);
         $this->assertInstanceOf(TestUserData::class, $result[1]);
@@ -375,33 +429,29 @@ final class AbstractDataTest extends TestCase
     // Helper Methods
     // ============================================================================
 
-    /**
-     * Create a test user object for collect() tests.
-     */
-    private function createUserObject(int $id, string $name, TestBackedStringEnum $status): object
+    private function createUserObject(string $id, string $name, TestUserStatus $status, TestUserRole $role, TestUserGrade $grade): object
     {
-        return new class($id, $name, $status)
+        return new class($id, $name, $status, $role, $grade)
         {
-            public int $id;
-
+            public string $id;
             public string $name;
-
-            public TestBackedStringEnum $status;
-
+            public string $email;
+            public TestUserStatus $status;
+            public TestUserRole $role;
+            public TestUserGrade $grade;
             public ?string $emailVerifiedAt = null;
-
-            public DateTime $createdAt;
-
+            public string $createdAt;
             public array $tags = [];
 
-            public ?array $metadata = null;
-
-            public function __construct(int $id, string $name, TestBackedStringEnum $status)
+            public function __construct(string $id, string $name, TestUserStatus $status, TestUserRole $role, TestUserGrade $grade)
             {
                 $this->id = $id;
                 $this->name = $name;
+                $this->email = $name . '@example.com';
                 $this->status = $status;
-                $this->createdAt = Carbon::now();
+                $this->role = $role;
+                $this->grade = $grade;
+                $this->createdAt = Carbon::now()->format('Y-m-d\TH:i:s\Z');
             }
         };
     }

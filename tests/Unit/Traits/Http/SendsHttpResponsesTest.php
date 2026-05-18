@@ -6,7 +6,9 @@ namespace AndyDefer\BestPractices\Tests\Unit\Traits\Http;
 
 use AndyDefer\BestPractices\Tests\Fixtures\Actions\TestAction;
 use AndyDefer\BestPractices\Tests\Fixtures\Data\TestUserData;
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestBackedStringEnum;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserGrade;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 use AndyDefer\BestPractices\Tests\TestCase;
 use DateTime;
 use Illuminate\Http\JsonResponse;
@@ -28,22 +30,24 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_json_returns_json_response_with_data(): void
     {
-        // Arrange: Create a test data object with known values
+        // Arrange
         $createdAt = new DateTime('2024-01-15 10:30:00');
         $testData = new TestUserData(
-            id: 1,
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::ADMIN,
+            grade: TestUserGrade::GOLD,
             emailVerifiedAt: '2024-01-15T10:30:00Z',
-            createdAt: $createdAt,
             tags: ['admin', 'premium'],
-            metadata: ['last_login' => '2024-01-15']
+            createdAt: $createdAt->format('Y-m-d\TH:i:s\Z'),
         );
 
-        // Act: Call the json method with data and custom status code
+        // Act
         $response = $this->sut->json($testData, 201);
 
-        // Assert: Verify response type, status code, and content match the provided data
+        // Assert
         $this->assertInstanceOf(JsonResponse::class, $response);
         $this->assertSame(201, $response->getStatusCode());
         $this->assertSame($testData->toArray(), $response->getData(true));
@@ -51,50 +55,51 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_json_returns_empty_response_when_data_is_null_and_status_is_204(): void
     {
-        // Arrange: Prepare null data and 204 No Content status code
-        // Act: Call the json method with null data and 204 status
+        // Act
         $response = $this->sut->noContent();
 
-        // Assert: Verify empty response with 204 status code
+        // Assert
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame(204, $response->getStatusCode());
 
         $content = $response->getContent();
-        $this->assertTrue($content === '' || $content === '{}');
+        $this->assertEmpty($content);
     }
 
     public function test_json_defaults_to_200_status_code_when_no_code_provided(): void
     {
-        // Arrange: Create a test data object with various property types
+        // Arrange
         $createdAt = new DateTime('2024-01-15 10:30:00');
         $testData = new TestUserData(
-            id: 1,
+            id: '1',
             name: 'John Doe',
-            status: TestBackedStringEnum::ACTIVE,
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::USER,
+            grade: TestUserGrade::BRONZE,
             emailVerifiedAt: '2024-01-15T10:30:00Z',
-            createdAt: $createdAt,
             tags: ['admin', 'premium'],
-            metadata: ['last_login' => '2024-01-15']
+            createdAt: $createdAt->format('Y-m-d\TH:i:s\Z'),
         );
 
-        // Act: Call the json method without specifying status code
+        // Act
         $response = $this->sut->json($testData);
 
-        // Assert: Verify default 200 status code and correct content
+        // Assert
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame($testData->toArray(), $response->getData(true));
     }
 
     public function test_redirect_returns_redirect_response_with_custom_status_code(): void
     {
-        // Arrange: Define target URL and permanent redirect status code
+        // Arrange
         $targetUrl = '/dashboard';
         $statusCode = 301;
 
-        // Act: Call the redirect method with custom parameters
+        // Act
         $response = $this->sut->redirect($targetUrl, $statusCode);
 
-        // Assert: Verify permanent redirect response and target URL
+        // Assert
         $this->assertInstanceOf(RedirectResponse::class, $response);
         $this->assertSame($statusCode, $response->getStatusCode());
         $this->assertStringEndsWith($targetUrl, $response->getTargetUrl());
@@ -102,29 +107,29 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_redirect_defaults_to_302_status_code_for_temporary_redirects(): void
     {
-        // Arrange: Define target URL only
+        // Arrange
         $targetUrl = '/dashboard';
 
-        // Act: Call the redirect method without custom status code
+        // Act
         $response = $this->sut->redirect($targetUrl);
 
-        // Assert: Verify temporary redirect (302) status code
+        // Assert
         $this->assertSame(302, $response->getStatusCode());
     }
 
     public function test_stream_returns_streamed_response_with_custom_parameters(): void
     {
-        // Arrange: Create a callback that outputs test data, with video content type and partial content status
+        // Arrange
         $callback = function (): void {
             echo 'test data';
         };
         $contentType = 'video/mp4';
         $statusCode = 206;
 
-        // Act: Call the stream method with custom parameters
+        // Act
         $response = $this->sut->stream($callback, $contentType, $statusCode);
 
-        // Assert: Verify streamed response type, partial content status, and proper headers
+        // Assert
         $this->assertInstanceOf(StreamedResponse::class, $response);
         $this->assertSame($statusCode, $response->getStatusCode());
         $this->assertSame($contentType, $response->headers->get('Content-Type'));
@@ -133,27 +138,27 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_stream_uses_default_content_type_when_none_provided(): void
     {
-        // Arrange: Create an empty callback
+        // Arrange
         $callback = function (): void {};
 
-        // Act: Call the stream method without specifying content type
+        // Act
         $response = $this->sut->stream($callback);
 
-        // Assert: Verify default binary stream content type
+        // Assert
         $this->assertSame('application/octet-stream', $response->headers->get('Content-Type'));
     }
 
     public function test_sse_returns_properly_configured_server_sent_events_response(): void
     {
-        // Arrange: Create an SSE callback that emits a test event
+        // Arrange
         $callback = function (): void {
             echo "data: test\n\n";
         };
 
-        // Act: Call the sse method with the callback
+        // Act
         $response = $this->sut->sse($callback);
 
-        // Assert: Verify SSE response has correct headers for real-time event streaming
+        // Assert
         $this->assertInstanceOf(StreamedResponse::class, $response);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('text/event-stream', $response->headers->get('Content-Type'));
@@ -164,12 +169,10 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_no_content_returns_empty_204_response(): void
     {
-        // Arrange: No setup needed for this test
-
-        // Act: Call the noContent method
+        // Act
         $response = $this->sut->noContent();
 
-        // Assert: Verify empty response with 204 No Content status code
+        // Assert
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame(204, $response->getStatusCode());
         $this->assertEmpty($response->getContent());
@@ -177,16 +180,15 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_inertia_returns_inertia_response_for_frontend_component_rendering(): void
     {
-        // Arrange: Define the component name to render
+        // Arrange
         $componentName = 'Dashboard/Index';
 
-        // Act: Call the inertia method with the component name
+        // Act
         $inertiaResponse = $this->sut->inertia($componentName);
 
-        // Assert: Verify Inertia response type and component name
+        // Assert
         $this->assertInstanceOf(\Inertia\Response::class, $inertiaResponse);
 
-        // Verify the component name using reflection (since property is protected)
         $reflection = new \ReflectionClass($inertiaResponse);
         $componentProperty = $reflection->getProperty('component');
         $componentProperty->setAccessible(true);
@@ -196,14 +198,14 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_html_returns_html_response_with_custom_status_code(): void
     {
-        // Arrange: Create HTML content and custom status code
+        // Arrange
         $htmlContent = '<h1>Hello World</h1>';
         $statusCode = 201;
 
-        // Act: Call the html method with custom parameters
+        // Act
         $response = $this->sut->html($htmlContent, $statusCode);
 
-        // Assert: Verify HTML response type, created status, and proper content type header
+        // Assert
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame($statusCode, $response->getStatusCode());
         $this->assertSame('text/html', $response->headers->get('Content-Type'));
@@ -212,68 +214,66 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_html_defaults_to_200_status_code_when_none_provided(): void
     {
-        // Arrange: Create HTML content only
+        // Arrange
         $htmlContent = '<h1>Test</h1>';
 
-        // Act: Call the html method without specifying status code
+        // Act
         $response = $this->sut->html($htmlContent);
 
-        // Assert: Verify default 200 OK status code
+        // Assert
         $this->assertSame(200, $response->getStatusCode());
     }
 
     public function test_file_inline_returns_file_with_inline_disposition_for_browser_display(): void
     {
-        // Arrange: Create a temporary file with test content and custom file name
+        // Arrange
         $tempFile = tempnam(sys_get_temp_dir(), 'test_');
         file_put_contents($tempFile, 'test content');
         $customFileName = 'custom.pdf';
 
-        // Act: Call the fileInline method with custom file name
+        // Act
         $response = $this->sut->fileInline($tempFile, $customFileName);
 
-        // Assert: Verify binary file response with inline disposition for browser display
+        // Assert
         $this->assertInstanceOf(BinaryFileResponse::class, $response);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString(
-            'inline; filename="'.$customFileName.'"',
+            'inline; filename="' . $customFileName . '"',
             $response->headers->get('Content-Disposition')
         );
 
-        // Cleanup: Remove temporary file to avoid disk pollution
         unlink($tempFile);
     }
 
     public function test_file_inline_uses_original_filename_when_no_custom_name_provided(): void
     {
-        // Arrange: Create a temporary file and get its base name
+        // Arrange
         $tempFile = tempnam(sys_get_temp_dir(), 'test_');
         $expectedFileName = basename($tempFile);
 
-        // Act: Call the fileInline method without custom file name
+        // Act
         $response = $this->sut->fileInline($tempFile);
 
-        // Assert: Verify inline disposition uses the original file name from the filesystem
+        // Assert
         $this->assertStringContainsString(
-            'inline; filename="'.$expectedFileName.'"',
+            'inline; filename="' . $expectedFileName . '"',
             $response->headers->get('Content-Disposition')
         );
 
-        // Cleanup: Remove temporary file to avoid disk pollution
         unlink($tempFile);
     }
 
     public function test_file_download_forces_file_download_with_custom_filename(): void
     {
-        // Arrange: Create a temporary file with test content and custom download name
+        // Arrange
         $tempFile = tempnam(sys_get_temp_dir(), 'test_');
         file_put_contents($tempFile, 'test content');
         $customFileName = 'download.pdf';
 
-        // Act: Call the fileDownload method with custom file name
+        // Act
         $response = $this->sut->fileDownload($tempFile, $customFileName);
 
-        // Assert: Verify binary file response with attachment disposition for forced download
+        // Assert
         $this->assertInstanceOf(BinaryFileResponse::class, $response);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString(
@@ -281,39 +281,37 @@ final class SendsHttpResponsesTest extends TestCase
             $response->headers->get('Content-Disposition')
         );
 
-        // Cleanup: Remove temporary file to avoid disk pollution
         unlink($tempFile);
     }
 
     public function test_file_download_uses_original_filename_when_no_custom_name_provided(): void
     {
-        // Arrange: Create a temporary file and get its base name
+        // Arrange
         $tempFile = tempnam(sys_get_temp_dir(), 'test_');
         $expectedFileName = basename($tempFile);
 
-        // Act: Call the fileDownload method without custom file name
+        // Act
         $response = $this->sut->fileDownload($tempFile);
 
-        // Assert: Verify download disposition includes the original file name
+        // Assert
         $this->assertStringContainsString(
             $expectedFileName,
             $response->headers->get('Content-Disposition')
         );
 
-        // Cleanup: Remove temporary file to avoid disk pollution
         unlink($tempFile);
     }
 
     public function test_text_returns_plain_text_response_with_custom_status_code(): void
     {
-        // Arrange: Create text content and custom status code
+        // Arrange
         $textContent = 'Hello World';
         $statusCode = 201;
 
-        // Act: Call the text method with custom parameters
+        // Act
         $response = $this->sut->text($textContent, $statusCode);
 
-        // Assert: Verify plain text response type, created status, and proper content type
+        // Assert
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame($statusCode, $response->getStatusCode());
         $this->assertSame('text/plain', $response->headers->get('Content-Type'));
@@ -322,13 +320,13 @@ final class SendsHttpResponsesTest extends TestCase
 
     public function test_text_defaults_to_200_status_code_when_none_provided(): void
     {
-        // Arrange: Create text content only
+        // Arrange
         $textContent = 'Hello World';
 
-        // Act: Call the text method without specifying status code
+        // Act
         $response = $this->sut->text($textContent);
 
-        // Assert: Verify default 200 OK status code
+        // Assert
         $this->assertSame(200, $response->getStatusCode());
     }
 }

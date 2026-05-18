@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AndyDefer\BestPractices\Records;
 
+use AndyDefer\BestPractices\Collections\TypedRecords;
 use DateTimeInterface;
 use ReflectionClass;
 use ReflectionProperty;
@@ -57,6 +58,16 @@ abstract class AbstractRecord implements Recordable
     }
 
     /**
+     * Converts the Record to a JSON string.
+     *
+     * @return string JSON representation of the Record
+     */
+    public function toJson(): string
+    {
+        return json_encode($this->toArray());
+    }
+
+    /**
      * Recursively removes null values from an array.
      *
      * @param  array<string, mixed>  $array  Array to clean
@@ -83,16 +94,6 @@ abstract class AbstractRecord implements Recordable
         }
 
         return $result;
-    }
-
-    /**
-     * Converts the Record to a JSON string.
-     *
-     * @return string JSON representation of the Record
-     */
-    public function toJson(): string
-    {
-        return json_encode($this->toArray());
     }
 
     /**
@@ -152,8 +153,9 @@ abstract class AbstractRecord implements Recordable
      *
      * Handles:
      * - Nested Record objects (converted via their toArray method)
+     * - TypedRecords (converted to array recursively)
      * - Traversable objects (converted to arrays recursively)
-     * - Enums (converted to scalar values or names)
+     * - Enums (converted to scalar values or lowercase names)
      * - DateTime objects (formatted as ISO 8601 UTC)
      * - Arrays (recursively processed)
      * - Null values (passed through)
@@ -169,12 +171,17 @@ abstract class AbstractRecord implements Recordable
             return $value->toArray();
         }
 
+        // TypedRecords → convert to array
+        if ($value instanceof TypedRecords) {
+            return $this->normalizeCollection($value);
+        }
+
         // Traversable (Collection, ArrayIterator, etc.) → convert to array recursively
         if ($value instanceof Traversable) {
             return $this->normalizeTraversable($value);
         }
 
-        // Enum → convert to scalar value (backed) or case name (pure)
+        // Enum → convert to scalar value (backed) or lowercase name (pure)
         if ($value instanceof UnitEnum) {
             return $this->normalizeEnum($value);
         }
@@ -191,6 +198,23 @@ abstract class AbstractRecord implements Recordable
 
         // Null or scalar → return as-is
         return $value;
+    }
+
+    /**
+     * Converts a TypedRecords to a normalized array.
+     *
+     * @param  TypedRecords  $collection
+     * @return array<int, mixed>
+     */
+    private function normalizeCollection(TypedRecords $collection): array
+    {
+        $result = [];
+
+        foreach ($collection->all() as $item) {
+            $result[] = $this->normalizeValue($item);
+        }
+
+        return $result;
     }
 
     /**
@@ -217,7 +241,7 @@ abstract class AbstractRecord implements Recordable
      * Converts an Enum to its serializable representation.
      *
      * For backed enums (string/int backed), returns the backing value.
-     * For pure enums (non-backed), returns the enum case name.
+     * For pure enums (non-backed), returns the enum case name in lowercase.
      *
      * @param  UnitEnum  $enum  The enum instance to convert
      * @return string|int Scalar representation of the enum

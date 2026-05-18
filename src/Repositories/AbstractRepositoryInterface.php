@@ -7,6 +7,7 @@ namespace AndyDefer\BestPractices\Repositories;
 use AndyDefer\BestPractices\Records\Recordable;
 use AndyDefer\BestPractices\Records\Repositories\FindByRecord;
 use AndyDefer\BestPractices\Records\Repositories\PaginateRecord;
+use AndyDefer\BestPractices\Records\Repositories\RepositoryInfoRecord;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -19,15 +20,23 @@ use Illuminate\Support\Collection;
  * must implement these methods.
  *
  * @template TModel of Model
+ * @template TRecord of Recordable
  *
  * @author Andy Defer
  */
 interface AbstractRepositoryInterface
 {
     /**
+     * Returns the repository information (Model class and Record class).
+     *
+     * @return RepositoryInfoRecord<TModel, TRecord>
+     */
+    public function info(): RepositoryInfoRecord;
+
+    /**
      * Creates a new record in the database.
      *
-     * @param  Recordable  $record  The record containing creation data
+     * @param  TRecord  $record  The record containing creation data
      * @return TModel The created model instance
      */
     public function create(Recordable $record): Model;
@@ -52,7 +61,7 @@ interface AbstractRepositoryInterface
      * Updates a record by its primary key.
      *
      * @param  int  $id  The primary key value
-     * @param  Recordable  $record  The record containing update data (only non-null values are applied)
+     * @param  TRecord  $record  The record containing update data (only non-null values are applied)
      * @return TModel The updated model instance
      *
      * @throws \RuntimeException When the record is not found
@@ -86,18 +95,10 @@ interface AbstractRepositoryInterface
     /**
      * Paginates results with the given parameters.
      *
-     * @param  PaginateRecord  $record  Pagination parameters (page, perPage, sort, filters, columns)
+     * @param  PaginateRecord $record  Pagination parameters (page, perPage, sort, filters, columns)
      * @return LengthAwarePaginator<TModel> Paginated results with metadata
      */
     public function paginate(PaginateRecord $record): LengthAwarePaginator;
-
-    /**
-     * Creates multiple records in a single transaction.
-     *
-     * @param  array<int, Recordable>  $records  Array of records to create
-     * @return Collection<int, TModel> Collection of created model instances
-     */
-    public function createBulk(array $records): Collection;
 
     /**
      * Deletes multiple records matching the given criteria in a single transaction.

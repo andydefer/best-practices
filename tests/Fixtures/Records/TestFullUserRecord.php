@@ -11,19 +11,16 @@ use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 
 /**
- * Test record for unit tests.
- *
- * PURE RECORD - No logic, just data structure.
- * Used for create/update operations in TestUserRepository.
+ * Test full user record for unit tests.
  */
-final class TestUserRecord extends AbstractRecord
+final class TestFullUserRecord extends AbstractRecord
 {
     public function __construct(
-        public readonly ?string $name = null,
-        public readonly ?string $email = null,
-        public readonly ?TestUserStatus $status = TestUserStatus::ACTIVE,
-        public readonly ?TestUserRole $role = TestUserRole::USER,
-        public readonly ?TestUserGrade $grade = TestUserGrade::BRONZE,
+        public readonly string $name,
+        public readonly string $email,
+        public readonly TestUserStatus $status = TestUserStatus::ACTIVE,
+        public readonly TestUserRole $role = TestUserRole::USER,
+        public readonly TestUserGrade $grade = TestUserGrade::BRONZE,
         public readonly ?string $emailVerifiedAt = null,
         public readonly TypedRecords $tags = new TypedRecords('string'),
         public readonly TypedRecords $products = new TypedRecords(TestProductRecord::class),

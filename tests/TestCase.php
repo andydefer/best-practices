@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AndyDefer\BestPractices\Tests;
 
+use AndyDefer\BestPractices\BestPracticesServiceProvider;
 use Carbon\Carbon;
 use Illuminate\Foundation\Application;
 use Orchestra\Testbench\TestCase as Orchestra;
@@ -67,7 +68,14 @@ abstract class TestCase extends Orchestra
 
     protected function defineEnvironment($app): void
     {
-        $app['config']->set('view.paths', [__DIR__.'/Fixtures/views']);
+        $app['config']->set('view.paths', [__DIR__ . '/Fixtures/views']);
+    }
+
+    protected function getPackageProviders($app)
+    {
+        return [
+            BestPracticesServiceProvider::class,
+        ];
     }
 
     /**
@@ -77,13 +85,13 @@ abstract class TestCase extends Orchestra
     protected function defineDatabaseMigrations(): void
     {
         // Load test-specific migrations first
-        $testMigrationsPath = __DIR__.'/database/migrations';
+        $testMigrationsPath = __DIR__ . '/database/migrations';
         if (is_dir($testMigrationsPath)) {
             $this->loadMigrationsFrom($testMigrationsPath);
         }
 
         // Load package migrations if they exist
-        $packageMigrationsPath = __DIR__.'/../database/migrations';
+        $packageMigrationsPath = __DIR__ . '/../database/migrations';
         if (is_dir($packageMigrationsPath)) {
             $this->loadMigrationsFrom($packageMigrationsPath);
         }

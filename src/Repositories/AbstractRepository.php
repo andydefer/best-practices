@@ -7,6 +7,7 @@ namespace AndyDefer\BestPractices\Repositories;
 use AndyDefer\BestPractices\Records\Recordable;
 use AndyDefer\BestPractices\Records\Repositories\FindByRecord;
 use AndyDefer\BestPractices\Records\Repositories\PaginateRecord;
+use AndyDefer\BestPractices\Records\Repositories\RepositoryInfoRecord;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -15,22 +16,34 @@ use Illuminate\Support\Facades\DB;
 /**
  * Abstract base class for all repositories.
  *
- * Provides common database operations (CRUD, pagination, bulk operations)
+ * Provides common database operations (CRUD, pagination, bulk delete)
  * for Eloquent models. All concrete repositories must extend this class
- * and implement the getModelClass() method.
+ * and implement the info() method to declare their Model and Record.
+ *
+ * **Important rules:**
+ * - Each Repository is responsible for ONE entity (Model)
+ * - Each Repository has ONE associated Record class for create/update
+ * - For bulk operations (multiple creates), use a Task and loop over create()
+ * - deleteBulk() is allowed because it uses criteria (Recordable) not an array
  *
  * @template TModel of Model
+ * @template TRecord of Recordable
  *
  * @author Andy Defer
  */
 abstract class AbstractRepository implements AbstractRepositoryInterface
 {
     /**
-     * Returns the fully qualified class name of the Eloquent model.
+     * Cached instance of the model.
      *
-     * @return class-string<TModel>
+     * @var TModel|null
      */
-    abstract protected function getModelClass(): string;
+    private ?Model $modelInstance = null;
+
+    /**
+     * {@inheritDoc}
+     */
+    abstract public function info(): RepositoryInfoRecord;
 
     /**
      * Creates a new instance of the model.
@@ -39,9 +52,31 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
      */
     final protected function newModel(): Model
     {
-        $class = $this->getModelClass();
+        if ($this->modelInstance === null) {
+            $class = $this->info()->modelClass;
+            $this->modelInstance = new $class;
+        }
 
-        return new $class;
+        return $this->modelInstance;
+    }
+
+    /**
+     * Verifies that the given record is of the correct type for this repository.
+     *
+     * @param  Recordable  $record  The record to validate
+     * @throws \InvalidArgumentException When the record type is incorrect
+     */
+    final protected function validateRecordType(Recordable $record): void
+    {
+        $expectedClass = $this->info()->recordClass;
+
+        if (!$record instanceof $expectedClass) {
+            throw new \InvalidArgumentException(sprintf(
+                'Expected record of type %s, got %s',
+                $expectedClass,
+                get_class($record)
+            ));
+        }
     }
 
     /**
@@ -49,8 +84,10 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
      */
     final public function create(Recordable $record): Model
     {
+        $this->validateRecordType($record);
+
         return DB::transaction(function () use ($record): Model {
-            return $this->newModel()->create($record->toArray());
+            return $this->newModel()->create($record->toDatabase());
         });
     }
 
@@ -89,13 +126,15 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
      */
     final public function update(int $id, Recordable $record): Model
     {
+        $this->validateRecordType($record);
+
         return DB::transaction(function () use ($id, $record): Model {
             $model = $this->find($id);
 
-            if (! $model) {
+            if (!$model) {
                 throw new \RuntimeException(sprintf(
                     '%s with id %d not found',
-                    $this->getModelClass(),
+                    $this->info()->modelClass,
                     $id
                 ));
             }
@@ -114,7 +153,7 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
         return DB::transaction(function () use ($id): bool {
             $model = $this->find($id);
 
-            if (! $model) {
+            if (!$model) {
                 return false;
             }
 
@@ -173,22 +212,6 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
             pageName: 'page',
             page: $record->page
         );
-    }
-
-    /**
-     * {@inheritDoc}
-     */
-    final public function createBulk(array $records): Collection
-    {
-        return DB::transaction(function () use ($records): Collection {
-            $models = new Collection;
-
-            foreach ($records as $record) {
-                $models->push($this->newModel()->create($record->toArray()));
-            }
-
-            return $models;
-        });
     }
 
     /**

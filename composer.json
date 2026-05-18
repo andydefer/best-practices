@@ -16,6 +16,13 @@
             "AndyDefer\\BestPractices\\Tests\\": "tests/"
         }
     },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "AndyDefer\\BestPractices\\BestPracticesServiceProvider"
+            ]
+        }
+    },
     "authors": [
         {
             "name": "Andy Defer",
