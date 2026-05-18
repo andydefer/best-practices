@@ -644,11 +644,11 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-use AndyDefer\BestPractices\Traits\Enum\Enumerable;
+use AndyDefer\BestPractices\Traits\Enum\Enumable;
 
 enum Permission: string
 {
-    use Enumerable;
+    use Enumable;
     
     case VIEW_USERS = 'view_users';
     case EDIT_USERS = 'edit_users';

@@ -13,7 +13,7 @@ namespace AndyDefer\BestPractices\Traits\Enum;
  *
  * @author Andy Defer
  */
-trait Enumerable
+trait Enumable
 {
     /**
      * Returns all scalar values from the enum.

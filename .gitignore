@@ -1,4 +1,9 @@
 docs/
 all.md
 Makefile
+pint-test.md
+rector.md
+composer.lock
+*.cache
+*.bak
 /vendor/

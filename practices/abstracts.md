@@ -293,38 +293,114 @@ final class User extends AbstractModel
 > **Utilisez ce couplage quand vous avez besoin des trois : contrat, implémentation partielle et comportement transversal.**
 
 ```php
-// ✅ BON - Abstract class + Interface + Trait
-interface ActionInterface
+<?php
+
+declare(strict_types=1);
+
+/**
+ * ✅ BON - Abstract class + Interface + Trait
+ * 
+ * Conventions appliquées :
+ * - Interface : {Entity}able → Actionable
+ * - Trait : Has{Entity} → HasHttpResponses
+ * - Abstract class : Abstract{Entity} → AbstractAction
+ */
+
+// ✅ Interface (contrat) - Se termine par 'able'
+interface Actionable
 {
     public function run(...$parameters): mixed;
 }
 
-trait SendsHttpResponses
+// ✅ Trait (implémentation) - Commence par 'Has'
+trait HasHttpResponses
 {
     public function json($data, int $code = 200): JsonResponse
     {
         return response()->json($data, $code);
     }
+    
+    public function success($data = null, string $message = 'Success', int $code = 200): JsonResponse
+    {
+        return $this->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $data,
+        ], $code);
+    }
+    
+    public function error(string $message, int $code = 400, $errors = null): JsonResponse
+    {
+        return $this->json([
+            'success' => false,
+            'message' => $message,
+            'errors' => $errors,
+        ], $code);
+    }
 }
 
-abstract class AbstractAction implements ActionInterface
+// ✅ Abstract class (respecte l'interface ET utilise le trait)
+abstract class AbstractAction implements Actionable
 {
-    use SendsHttpResponses;
+    use HasHttpResponses;  // ✅ Trait avec convention HasHttpResponses
     
+    // Interface requirement
     abstract public function run(...$parameters): mixed;
     
+    // Méthode utilitaire commune à toutes les Actions
     protected function validateRequest(FormRequest $request): void
     {
         $request->validated();
     }
+    
+    // Protection CSRF pour les actions web (optionnel)
+    protected function authorize(string $ability, $arguments = []): void
+    {
+        Gate::authorize($ability, $arguments);
+    }
 }
 
+// ✅ Implementation finale
 final class ShowUserAction extends AbstractAction
 {
+    public function __construct(
+        private readonly UserService $userService,
+    ) {}
+    
     public function run(int $userId, ShowUserRequest $request): JsonResponse
     {
-        // Implémentation
-        return $this->json($userData);
+        $userRecord = $this->userService->getUser($userId);
+        
+        if ($userRecord === null) {
+            return $this->error('User not found', 404);
+        }
+        
+        $userData = UserData::fromRecord($userRecord);
+        
+        return $this->success($userData);
+    }
+}
+
+// ✅ Autre exemple - Action de création
+final class CreateUserAction extends AbstractAction
+{
+    public function __construct(
+        private readonly UserService $userService,
+    ) {}
+    
+    public function run(CreateUserRequest $request): JsonResponse
+    {
+        $this->validateRequest($request);
+        
+        $userRecord = $this->userService->createUser(
+            name: $request->input('name'),
+            email: $request->input('email'),
+            role: UserRole::fromValue($request->input('role')),
+        );
+        
+        $userData = UserData::fromRecord($userRecord);
+        
+        return $this->success($userData, 'User created successfully', 201);
     }
 }
 ```
@@ -372,13 +448,26 @@ final class ShowUserAction extends AbstractAction
 > **Une classe abstraite fournit une implémentation partielle commune. Elle peut être couplée à une interface (pour un contrat commun) et/ou à un trait (pour un comportement transversal). Elle définit ce qui est commun et impose ce qui doit être implémenté.**
 
 ```php
-// La classe abstraite parfaite avec Interface + Trait
+<?php
+
+/**
+ * ✅ VARIANTE AVEC INTERFACE SPÉCIFIQUE POUR LA VALIDATION
+ */
+
+// Interface pour l'exécution
 interface Executable
 {
     public function execute(mixed $input): mixed;
 }
 
-trait Validatable
+// Interface pour la validation (optionnelle)
+interface Validatable
+{
+    public function validate(mixed $input): bool;
+}
+
+// ✅ Trait HasValidation (implémentation de Validatable)
+trait HasValidations
 {
     protected function validate(mixed $input): bool
     {
@@ -386,9 +475,10 @@ trait Validatable
     }
 }
 
-abstract class AbstractExecutor implements Executable
+// ✅ Abstract class qui implémente Executable ET Validatable
+abstract class AbstractExecutor implements Executable, Validatable
 {
-    use Validatable;
+    use HasValidations;  // ✅ Implémente Validatable via le trait
     
     protected array $config = [];
     
@@ -401,15 +491,6 @@ abstract class AbstractExecutor implements Executable
         }
         
         return $this->execute($input);
-    }
-}
-
-final class UserExecutor extends AbstractExecutor
-{
-    public function execute(mixed $input): mixed
-    {
-        // Implémentation spécifique
-        return $input;
     }
 }
 ```

@@ -9,7 +9,7 @@ use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestBackedStringEnum;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestPureEnum;
 use AndyDefer\BestPractices\Tests\TestCase;
 
-final class EnumerableTest extends TestCase
+final class EnumableTest extends TestCase
 {
     public function test_values_returns_backing_values_for_backed_string_enum(): void
     {

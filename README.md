@@ -84,7 +84,7 @@ app/
 ├── Tasks/             # Actions unitaires de même nature
 ├── Repositories/      # Accès aux données (étendent AbstractRepository)
 ├── Models/            # Modèles anémiques (déclarations uniquement)
-├── Enums/             # Enums typés avec trait Enumerable
+├── Enums/             # Enums typés avec trait Enumable
 ├── Http/
 │   ├── Requests/      # Form Requests (une par route)
 │   └── Middlewares/   # Middlewares (auth, logs, CORS)
@@ -93,7 +93,7 @@ app/
 
 ---
 
-**Version:** 2.0.0  
+**Version:** 1.0.1  
 **Mainteneur:** Andydefer  
 **Dernière mise à jour:** 2026-05-17
 ```

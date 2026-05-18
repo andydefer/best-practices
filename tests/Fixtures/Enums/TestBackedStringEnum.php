@@ -2,11 +2,11 @@
 
 namespace AndyDefer\BestPractices\Tests\Fixtures\Enums;
 
-use AndyDefer\BestPractices\Traits\Enum\Enumerable;
+use AndyDefer\BestPractices\Traits\Enum\Enumable;
 
 enum TestBackedStringEnum: string
 {
-    use Enumerable;
+    use Enumable;
 
     case ACTIVE = 'active';
     case INACTIVE = 'inactive';

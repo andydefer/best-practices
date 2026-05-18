@@ -11,7 +11,7 @@ Enum → Ensemble fixe de valeurs → Backed (string|int) → Nom en PascalCase
 ```php
 enum UserRole: string
 {
-    use Enumerable;
+    use Enumable;
 
     case ADMIN = 'admin';
     case USER = 'user';
@@ -130,11 +130,11 @@ enum UserStatus: string
 
 ---
 
-## 3. Trait `Enumerable`
+## 3. Trait `Enumable`
 
-> **Tout Enum DOIT utiliser le trait `Enumerable` qui fournit les méthodes utilitaires.**
+> **Tout Enum DOIT utiliser le trait `Enumable` qui fournit les méthodes utilitaires.**
 
-### 3.1 Code du trait `Enumerable`
+### 3.1 Code du trait `Enumable`
 
 ```php
 <?php
@@ -153,7 +153,7 @@ namespace AndyDefer\BestPractices\Traits\Enum;
  * @author Andy Defer
  * @package AndyDefer\BestPractices\Traits\Enum
  */
-trait Enumerable
+trait Enumable
 {
     /**
      * Returns all scalar values from the enum.
@@ -269,11 +269,11 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-use AndyDefer\BestPractices\Traits\Enum\Enumerable;
+use AndyDefer\BestPractices\Traits\Enum\Enumable;
 
 enum UserRole: string
 {
-    use Enumerable;
+    use Enumable;
     
     case ADMIN = 'admin';
     case USER = 'user';
@@ -302,7 +302,7 @@ UserRole::fromValue('unknown'); // null
 // ✅ BON - Méthodes de formatage avec préfixe 'get'
 enum UserStatus: string
 {
-    use Enumerable;
+    use Enumable;
     
     case ACTIVE = 'active';
     case INACTIVE = 'inactive';
@@ -354,7 +354,7 @@ public function icon(): string { ... }   // ❌ Interdit
 // ✅ BON - Méthodes utilitaires (is + nom du case)
 enum UserStatus: string
 {
-    use Enumerable;
+    use Enumable;
     
     case ACTIVE = 'active';
     case INACTIVE = 'inactive';
@@ -506,11 +506,11 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-use AndyDefer\BestPractices\Traits\Enum\Enumerable;
+use AndyDefer\BestPractices\Traits\Enum\Enumable;
 
 enum UserStatus: string
 {
-    use Enumerable;
+    use Enumable;
     
     case ACTIVE = 'active';
     case INACTIVE = 'inactive';
@@ -596,11 +596,11 @@ declare(strict_types=1);
 
 namespace App\Enums;
 
-use AndyDefer\BestPractices\Traits\Enum\Enumerable;
+use AndyDefer\BestPractices\Traits\Enum\Enumable;
 
 enum HttpStatusCode: int
 {
-    use Enumerable;
+    use Enumable;
     
     case OK = 200;
     case CREATED = 201;
@@ -676,7 +676,7 @@ final class User extends Model
 // Utilisation (via Repository)
 $user = $this->userRepository->find(1);
 
-// Méthodes du trait Enumerable
+// Méthodes du trait Enumable
 $values = UserRole::values();      // ['admin', 'user', 'doctor']
 $names = UserRole::names();        // ['ADMIN', 'USER', 'DOCTOR']
 $isValid = UserRole::isValid('admin');  // true
@@ -711,7 +711,7 @@ if ($user->status->isBanned()) {
 | **Nom de l'Enum (indépendant)** | `PascalCase` (ex: `HttpStatusCode`) |
 | **Clés (cases)** | `SCREAMING_SNAKE_CASE` |
 | **Valeurs** | `snake_case` |
-| **Trait** | Doit utiliser `Enumerable` |
+| **Trait** | Doit utiliser `Enumable` |
 | **Méthodes de formatage** | Avec préfixe `get` (ex: `getLabel()`, `getIcon()`) |
 | **Méthodes utilitaires** | `is{Case}` (ex: `isActive()`, `isInactive()`) |
 | **Retour méthodes utilitaires** | Toujours `bool` |
@@ -727,13 +727,13 @@ if ($user->status->isBanned()) {
 
 ## 8. Règle d'or
 
-> **Un Enum est un backed enum avec un nom en PascalCase ({Model}{Field} s'il est lié à un Model), des clés en SCREAMING_SNAKE_CASE, des valeurs en snake_case. Il utilise le trait Enumerable. Les méthodes de formatage commencent par `get`. Les méthodes utilitaires commencent par `is`, retournent `bool` et n'ont pas de paramètres. Tous les match sont exhaustifs.**
+> **Un Enum est un backed enum avec un nom en PascalCase ({Model}{Field} s'il est lié à un Model), des clés en SCREAMING_SNAKE_CASE, des valeurs en snake_case. Il utilise le trait Enumable. Les méthodes de formatage commencent par `get`. Les méthodes utilitaires commencent par `is`, retournent `bool` et n'ont pas de paramètres. Tous les match sont exhaustifs.**
 
 ```php
 // L'Enum parfait (lié à un Model)
 enum PerfectEnum: string
 {
-    use Enumerable;
+    use Enumable;
     
     case FIRST_VALUE = 'first_value';
     case SECOND_VALUE = 'second_value';
