@@ -1,6 +1,6 @@
 {
     "name": "andydefer/best-practices",
-    "description": "Documentation des conventions et bonnes pratiques pour une architecture Laravel standardisée, maintenable et testable",
+    "description": "Architecture standardisée pour Laravel : Records typés, Actions découplées, Collections type-safe et tests robustes",
     "type": "library",
     "license": "MIT",
     "autoload": {
