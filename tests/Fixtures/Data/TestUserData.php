@@ -18,8 +18,8 @@ final class TestUserData extends AbstractData
         public readonly TestUserStatus $status,
         public readonly TestUserRole $role,
         public readonly TestUserGrade $grade,
-        public readonly ?string $emailVerifiedAt = null,
-        public readonly array $tags = [],
+        public readonly ?string $emailVerifiedAt,
+        public readonly array $tags,
         public readonly string $createdAt,
     ) {}
 }

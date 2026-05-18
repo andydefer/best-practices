@@ -11,7 +11,7 @@ final class BoolTypedRecordsTest extends TestCase
 {
     public function test_constructor_creates_empty_collection(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertTrue($collection->isEmpty());
         $this->assertSame(['bool'], $collection->getAllowedTypes());
@@ -19,7 +19,7 @@ final class BoolTypedRecordsTest extends TestCase
 
     public function test_add_bools(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true);
 
         $this->assertCount(3, $collection);
@@ -30,13 +30,13 @@ final class BoolTypedRecordsTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add('hello'); // string not allowed
     }
 
-    public function test_trueOnly_returns_only_true_values(): void
+    public function test_true_only_returns_only_true_values(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true)->add(false)->add(true);
 
         $result = $collection->trueOnly();
@@ -46,9 +46,9 @@ final class BoolTypedRecordsTest extends TestCase
         $this->assertSame([true, true, true], $result->toArray());
     }
 
-    public function test_falseOnly_returns_only_false_values(): void
+    public function test_false_only_returns_only_false_values(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true)->add(false)->add(true);
 
         $result = $collection->falseOnly();
@@ -58,131 +58,131 @@ final class BoolTypedRecordsTest extends TestCase
         $this->assertSame([false, false], $result->toArray());
     }
 
-    public function test_countTrue_returns_number_of_true_values(): void
+    public function test_count_true_returns_number_of_true_values(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true)->add(false)->add(true);
 
         $this->assertSame(3, $collection->countTrue());
     }
 
-    public function test_countTrue_on_empty_collection_returns_zero(): void
+    public function test_count_true_on_empty_collection_returns_zero(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertSame(0, $collection->countTrue());
     }
 
-    public function test_countFalse_returns_number_of_false_values(): void
+    public function test_count_false_returns_number_of_false_values(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true)->add(false)->add(true);
 
         $this->assertSame(2, $collection->countFalse());
     }
 
-    public function test_countFalse_on_empty_collection_returns_zero(): void
+    public function test_count_false_on_empty_collection_returns_zero(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertSame(0, $collection->countFalse());
     }
 
-    public function test_allTrue_returns_true_when_all_are_true(): void
+    public function test_all_true_returns_true_when_all_are_true(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(true)->add(true);
 
         $this->assertTrue($collection->allTrue());
     }
 
-    public function test_allTrue_returns_false_when_any_false_exists(): void
+    public function test_all_true_returns_false_when_any_false_exists(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true);
 
         $this->assertFalse($collection->allTrue());
     }
 
-    public function test_allTrue_on_empty_collection_returns_true(): void
+    public function test_all_true_on_empty_collection_returns_true(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertTrue($collection->allTrue()); // vacuously true
     }
 
-    public function test_allFalse_returns_true_when_all_are_false(): void
+    public function test_all_false_returns_true_when_all_are_false(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(false)->add(false)->add(false);
 
         $this->assertTrue($collection->allFalse());
     }
 
-    public function test_allFalse_returns_false_when_any_true_exists(): void
+    public function test_all_false_returns_false_when_any_true_exists(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(false)->add(true)->add(false);
 
         $this->assertFalse($collection->allFalse());
     }
 
-    public function test_allFalse_on_empty_collection_returns_true(): void
+    public function test_all_false_on_empty_collection_returns_true(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertTrue($collection->allFalse()); // vacuously true
     }
 
-    public function test_anyTrue_returns_true_when_at_least_one_true(): void
+    public function test_any_true_returns_true_when_at_least_one_true(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(false)->add(true)->add(false);
 
         $this->assertTrue($collection->anyTrue());
     }
 
-    public function test_anyTrue_returns_false_when_no_true(): void
+    public function test_any_true_returns_false_when_no_true(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(false)->add(false)->add(false);
 
         $this->assertFalse($collection->anyTrue());
     }
 
-    public function test_anyTrue_on_empty_collection_returns_false(): void
+    public function test_any_true_on_empty_collection_returns_false(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertFalse($collection->anyTrue());
     }
 
-    public function test_anyFalse_returns_true_when_at_least_one_false(): void
+    public function test_any_false_returns_true_when_at_least_one_false(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true);
 
         $this->assertTrue($collection->anyFalse());
     }
 
-    public function test_anyFalse_returns_false_when_no_false(): void
+    public function test_any_false_returns_false_when_no_false(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(true)->add(true);
 
         $this->assertFalse($collection->anyFalse());
     }
 
-    public function test_anyFalse_on_empty_collection_returns_false(): void
+    public function test_any_false_on_empty_collection_returns_false(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertFalse($collection->anyFalse());
     }
 
     public function test_chained_operations(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true)->add(false)->add(true);
 
         $trueCount = $collection
@@ -194,7 +194,7 @@ final class BoolTypedRecordsTest extends TestCase
 
     public function test_original_collection_is_not_modified(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true);
 
         $collection->trueOnly();
@@ -204,7 +204,7 @@ final class BoolTypedRecordsTest extends TestCase
 
     public function test_empty_collection_operations_return_empty(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
 
         $this->assertTrue($collection->trueOnly()->isEmpty());
         $this->assertTrue($collection->falseOnly()->isEmpty());
@@ -218,7 +218,7 @@ final class BoolTypedRecordsTest extends TestCase
 
     public function test_json_serialize(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true);
 
         $json = json_encode($collection);
@@ -226,9 +226,9 @@ final class BoolTypedRecordsTest extends TestCase
         $this->assertSame('[true,false,true]', $json);
     }
 
-    public function test_toArray_returns_items(): void
+    public function test_to_array_returns_items(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true);
 
         $this->assertSame([true, false, true], $collection->toArray());
@@ -236,23 +236,23 @@ final class BoolTypedRecordsTest extends TestCase
 
     public function test_count_method_returns_number_of_items(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true)->add(false)->add(true);
 
         $this->assertSame(3, $collection->count());
     }
 
-    public function test_isEmpty_returns_false_for_non_empty_collection(): void
+    public function test_is_empty_returns_false_for_non_empty_collection(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true);
 
         $this->assertFalse($collection->isEmpty());
     }
 
-    public function test_isNotEmpty_returns_true_for_non_empty_collection(): void
+    public function test_is_not_empty_returns_true_for_non_empty_collection(): void
     {
-        $collection = new BoolTypedRecords();
+        $collection = new BoolTypedRecords;
         $collection->add(true);
 
         $this->assertTrue($collection->isNotEmpty());

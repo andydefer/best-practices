@@ -21,7 +21,7 @@ final class IntTypedRecords extends AbstractNumberTypedRecords
      */
     public function zero(): self
     {
-        return $this->filter(fn($item) => $item === 0);
+        return $this->filter(fn ($item) => $item === 0);
     }
 
     /**
@@ -29,7 +29,7 @@ final class IntTypedRecords extends AbstractNumberTypedRecords
      */
     public function nonNegative(): self
     {
-        return $this->filter(fn($item) => $item >= 0);
+        return $this->filter(fn ($item) => $item >= 0);
     }
 
     /**
@@ -37,7 +37,7 @@ final class IntTypedRecords extends AbstractNumberTypedRecords
      */
     public function even(): self
     {
-        return $this->filter(fn($item) => $item % 2 === 0);
+        return $this->filter(fn ($item) => $item % 2 === 0);
     }
 
     /**
@@ -45,7 +45,7 @@ final class IntTypedRecords extends AbstractNumberTypedRecords
      */
     public function odd(): self
     {
-        return $this->filter(fn($item) => $item % 2 !== 0);
+        return $this->filter(fn ($item) => $item % 2 !== 0);
     }
 
     /**

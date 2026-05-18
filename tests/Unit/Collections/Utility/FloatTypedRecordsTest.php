@@ -11,7 +11,7 @@ final class FloatTypedRecordsTest extends TestCase
 {
     public function test_constructor_creates_empty_collection(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
 
         $this->assertTrue($collection->isEmpty());
         $this->assertSame(['float'], $collection->getAllowedTypes());
@@ -19,7 +19,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_add_floats(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.5)->add(2.7)->add(3.9);
 
         $this->assertCount(3, $collection);
@@ -30,13 +30,13 @@ final class FloatTypedRecordsTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add('hello');
     }
 
     public function test_round_rounds_numbers_to_specified_precision(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.234)->add(2.567)->add(3.891);
 
         $result = $collection->round(2);
@@ -47,7 +47,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_round_without_precision_rounds_to_integer(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.4)->add(2.6)->add(3.5);
 
         $result = $collection->round();
@@ -57,7 +57,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_ceil_rounds_up_to_nearest_integer(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.2)->add(2.7)->add(3.1);
 
         $result = $collection->ceil();
@@ -67,7 +67,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_floor_rounds_down_to_nearest_integer(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.2)->add(2.7)->add(3.1);
 
         $result = $collection->floor();
@@ -77,7 +77,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_format_formats_numbers_with_decimals(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.234)->add(2.567)->add(3.891);
 
         $result = $collection->format(2);
@@ -87,7 +87,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_positive_returns_only_positive_numbers(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(-1.5)->add(2.7)->add(-3.9)->add(4.2)->add(0.0);
 
         $result = $collection->positive();
@@ -97,7 +97,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_negative_returns_only_negative_numbers(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(-1.5)->add(2.7)->add(-3.9)->add(4.2)->add(0.0);
 
         $result = $collection->negative();
@@ -107,7 +107,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_between_returns_numbers_in_range(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.5)->add(2.7)->add(3.9)->add(5.1)->add(6.3);
 
         $result = $collection->between(2.0, 5.0);
@@ -117,7 +117,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_average_calculates_mean(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(10.5)->add(20.3)->add(30.2);
 
         $this->assertEquals(20.333333333333332, $collection->average());
@@ -141,7 +141,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_chained_operations(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(-1.5)->add(2.7)->add(-3.9)->add(4.2)->add(5.5);
 
         $result = $collection
@@ -154,7 +154,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_empty_collection_operations_return_empty(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
 
         $this->assertTrue($collection->positive()->isEmpty());
         $this->assertTrue($collection->negative()->isEmpty());
@@ -167,7 +167,7 @@ final class FloatTypedRecordsTest extends TestCase
 
     public function test_json_serialize(): void
     {
-        $collection = new FloatTypedRecords();
+        $collection = new FloatTypedRecords;
         $collection->add(1.5)->add(2.7)->add(3.9);
 
         $json = json_encode($collection);

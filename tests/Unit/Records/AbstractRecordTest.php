@@ -207,6 +207,7 @@ final class AbstractRecordTest extends TestCase
         $this->assertSame('ACTIVE', $result['status']);
         $this->assertSame(1, $result['grade']);
     }
+
     /**
      * Test that toDatabase includes all values when none are null.
      *

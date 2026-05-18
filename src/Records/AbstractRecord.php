@@ -203,7 +203,6 @@ abstract class AbstractRecord implements Recordable
     /**
      * Converts a TypedRecords to a normalized array.
      *
-     * @param  TypedRecords  $collection
      * @return array<int, mixed>
      */
     private function normalizeCollection(TypedRecords $collection): array

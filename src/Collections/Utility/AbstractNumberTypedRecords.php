@@ -10,6 +10,7 @@ use AndyDefer\BestPractices\Collections\TypedRecords;
  * Classe de base abstraite pour les collections de nombres (int ou float).
  *
  * @template TValue of int|float
+ *
  * @extends TypedRecords<TValue>
  */
 abstract class AbstractNumberTypedRecords extends TypedRecords
@@ -21,7 +22,7 @@ abstract class AbstractNumberTypedRecords extends TypedRecords
      */
     public function positive(): static
     {
-        return $this->filter(fn($item) => $item > 0);
+        return $this->filter(fn ($item) => $item > 0);
     }
 
     /**
@@ -31,19 +32,19 @@ abstract class AbstractNumberTypedRecords extends TypedRecords
      */
     public function negative(): static
     {
-        return $this->filter(fn($item) => $item < 0);
+        return $this->filter(fn ($item) => $item < 0);
     }
 
     /**
      * Filtre les nombres dans un intervalle.
      *
-     * @param TValue $min
-     * @param TValue $max
+     * @param  TValue  $min
+     * @param  TValue  $max
      * @return static<TValue>
      */
     public function between(int|float $min, int|float $max): static
     {
-        return $this->filter(fn($item) => $item >= $min && $item <= $max);
+        return $this->filter(fn ($item) => $item >= $min && $item <= $max);
     }
 
     /**
@@ -52,20 +53,21 @@ abstract class AbstractNumberTypedRecords extends TypedRecords
     public function average(): float
     {
         $count = $this->count();
+
         return $count > 0 ? $this->sum() / $count : 0.0;
     }
 
     /**
      * Génère une séquence de nombres.
      *
-     * @param TValue $start
-     * @param TValue $end
-     * @param TValue $step
+     * @param  TValue  $start
+     * @param  TValue  $end
+     * @param  TValue  $step
      * @return static<TValue>
      */
     public static function range(int|float $start, int|float $end, int|float $step = 1): static
     {
-        $collection = new static();
+        $collection = new static;
 
         if ($step == 0) {
             return $collection;

@@ -15,7 +15,6 @@ use Illuminate\Foundation\Http\FormRequest;
  * into a Record object that can be passed to Actions.
  *
  * @author Andy Defer
- * @package AndyDefer\BestPractices\Http\Requests
  */
 abstract class AbstractRequest extends FormRequest
 {

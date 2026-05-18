@@ -7,7 +7,6 @@ namespace AndyDefer\BestPractices\Collections;
 use AndyDefer\BestPractices\Records\AbstractRecord;
 use AndyDefer\BestPractices\Traits\Records\ArrayableCollectionTrait;
 use Closure;
-use Countable;
 use InvalidArgumentException;
 use UnitEnum;
 
@@ -21,6 +20,7 @@ use UnitEnum;
 class TypedRecords implements TypedRecordsInterface
 {
     use ArrayableCollectionTrait;
+
     /**
      * @var array<TValue>
      */
@@ -63,6 +63,7 @@ class TypedRecords implements TypedRecordsInterface
 
     /**
      * @param  class-string<AbstractRecord>|string  ...$types
+     *
      * @throws InvalidArgumentException
      */
     public function __construct(...$types)
@@ -83,6 +84,7 @@ class TypedRecords implements TypedRecordsInterface
      * Validate that all types are valid.
      *
      * @param  array<int, class-string<AbstractRecord>|string>  $types
+     *
      * @throws InvalidArgumentException
      */
     private function validateTypes(array $types): void
@@ -100,6 +102,7 @@ class TypedRecords implements TypedRecordsInterface
      * Validate a single type.
      *
      * @param  class-string<AbstractRecord>|string  $type
+     *
      * @throws InvalidArgumentException
      */
     private function validateSingleType(string $type): void
@@ -116,11 +119,11 @@ class TypedRecords implements TypedRecordsInterface
             return;
         }
 
-        if (!class_exists($type)) {
+        if (! class_exists($type)) {
             throw new InvalidArgumentException(sprintf('Type "%s" is not a valid class', $type));
         }
 
-        if (!is_subclass_of($type, AbstractRecord::class)) {
+        if (! is_subclass_of($type, AbstractRecord::class)) {
             throw new InvalidArgumentException(sprintf(
                 'Type "%s" must extend %s or be %s',
                 $type,
@@ -174,6 +177,7 @@ class TypedRecords implements TypedRecordsInterface
      * Validate that an item matches at least one allowed type.
      *
      * @param  TValue  $item
+     *
      * @throws InvalidArgumentException
      */
     private function validateItem(mixed $item): void
@@ -185,7 +189,7 @@ class TypedRecords implements TypedRecordsInterface
             ));
         }
 
-        if (!$this->matchesAllowedType($item)) {
+        if (! $this->matchesAllowedType($item)) {
             $allowedTypesStr = implode('|', $this->allowedTypes);
             throw new InvalidArgumentException(sprintf(
                 'Expected type(s) %s, got %s',
@@ -208,7 +212,6 @@ class TypedRecords implements TypedRecordsInterface
     /**
      * Add one or multiple items.
      *
-     * @param int|string|float|bool|null|AbstractRecord|TypedRecords ...$items
      * @return TypedRecords<TValue>
      */
     final public function add(int|string|float|bool|null|AbstractRecord|TypedRecords ...$items): static
@@ -232,6 +235,7 @@ class TypedRecords implements TypedRecordsInterface
     {
         return $this->items;
     }
+
     /**
      * Get all items as a new TypedRecords collection.
      *
@@ -253,7 +257,6 @@ class TypedRecords implements TypedRecordsInterface
     final public function getAllowedTypes(): array
     {
 
-
         return $this->allowedTypes;
     }
 
@@ -269,7 +272,7 @@ class TypedRecords implements TypedRecordsInterface
 
     final public function isNotEmpty(): bool
     {
-        return !$this->isEmpty();
+        return ! $this->isEmpty();
     }
 
     final public function map(Closure $callback): static
@@ -320,7 +323,7 @@ class TypedRecords implements TypedRecordsInterface
 
     final public function reject(Closure $callback): static
     {
-        return $this->filter(fn($item) => !$callback($item));
+        return $this->filter(fn ($item) => ! $callback($item));
     }
 
     final public function each(Closure $callback): static
@@ -478,7 +481,7 @@ class TypedRecords implements TypedRecordsInterface
     {
         $allowedTypes = array_values(array_filter(
             $this->allowedTypes,
-            fn($t) => $t !== $type
+            fn ($t) => $t !== $type
         ));
 
         if (empty($allowedTypes)) {
@@ -489,7 +492,7 @@ class TypedRecords implements TypedRecordsInterface
 
         foreach ($this->items as $item) {
             $itemType = $this->getValueTypeName($item);
-            if ($itemType !== $type && !($item instanceof $type)) {
+            if ($itemType !== $type && ! ($item instanceof $type)) {
                 $result->add($item);
             }
         }
@@ -503,7 +506,7 @@ class TypedRecords implements TypedRecordsInterface
 
         foreach ($this->items as $item) {
             $type = $this->getValueTypeName($item);
-            if (!in_array($type, $types, true)) {
+            if (! in_array($type, $types, true)) {
                 $types[] = $type;
             }
         }
@@ -544,7 +547,7 @@ class TypedRecords implements TypedRecordsInterface
 
     final public function ofRecord(string $recordClass): static
     {
-        if (!is_subclass_of($recordClass, AbstractRecord::class) && $recordClass !== AbstractRecord::class) {
+        if (! is_subclass_of($recordClass, AbstractRecord::class) && $recordClass !== AbstractRecord::class) {
             throw new InvalidArgumentException(sprintf('%s must extend %s', $recordClass, AbstractRecord::class));
         }
 
@@ -675,7 +678,7 @@ class TypedRecords implements TypedRecordsInterface
         foreach ($this->items as $item) {
             $mapped = $callback($item);
 
-            if (!$mapped instanceof self) {
+            if (! $mapped instanceof self) {
                 throw new InvalidArgumentException('flatMap callback must return a TypedRecords instance');
             }
 
@@ -760,7 +763,7 @@ class TypedRecords implements TypedRecordsInterface
 
         foreach ($this->items as $item) {
             $itemType = $this->getValueTypeName($item);
-            if ($itemType !== $type && !($item instanceof $type)) {
+            if ($itemType !== $type && ! ($item instanceof $type)) {
                 return false;
             }
         }
@@ -786,7 +789,7 @@ class TypedRecords implements TypedRecordsInterface
 
         foreach ($this->items as $item) {
             $type = $this->getValueTypeName($item);
-            if (!in_array($type, $types, true)) {
+            if (! in_array($type, $types, true)) {
                 $types[] = $type;
             }
             if (count($types) > 1) {
@@ -799,13 +802,13 @@ class TypedRecords implements TypedRecordsInterface
 
     final public function isHeterogeneous(): bool
     {
-        return !$this->isHomogeneous();
+        return ! $this->isHomogeneous();
     }
 
     final public function assertAllOfType(string $type): static
     {
-        if (!$this->isOnlyType($type)) {
-            $actualTypes = implode(', ', array_map(fn($item) => $this->getValueTypeName($item), $this->items));
+        if (! $this->isOnlyType($type)) {
+            $actualTypes = implode(', ', array_map(fn ($item) => $this->getValueTypeName($item), $this->items));
             throw new InvalidArgumentException(
                 sprintf('Expected all items to be of type "%s", found: %s', $type, $actualTypes)
             );
@@ -825,8 +828,8 @@ class TypedRecords implements TypedRecordsInterface
 
     final public function assertContainsType(string $type): static
     {
-        if (!$this->containsType($type)) {
-            $availableTypes = implode(', ', array_map(fn($item) => $this->getValueTypeName($item), $this->items));
+        if (! $this->containsType($type)) {
+            $availableTypes = implode(', ', array_map(fn ($item) => $this->getValueTypeName($item), $this->items));
             throw new InvalidArgumentException(
                 sprintf('Collection does not contain type "%s". Available types: %s', $type, $availableTypes)
             );
@@ -838,13 +841,13 @@ class TypedRecords implements TypedRecordsInterface
     final public function assertAllImplement(string $interface): static
     {
         foreach ($this->items as $item) {
-            if (!is_object($item)) {
+            if (! is_object($item)) {
                 throw new InvalidArgumentException(
                     sprintf('Item of type "%s" is not an object', gettype($item))
                 );
             }
 
-            if (!$item instanceof $interface) {
+            if (! $item instanceof $interface) {
                 throw new InvalidArgumentException(
                     sprintf('Item of class "%s" does not implement "%s"', $item::class, $interface)
                 );
@@ -857,7 +860,7 @@ class TypedRecords implements TypedRecordsInterface
     final public function assertScalar(): static
     {
         foreach ($this->items as $item) {
-            if (!$this->isScalarValue($item)) {
+            if (! $this->isScalarValue($item)) {
                 throw new InvalidArgumentException(
                     sprintf('Expected scalar value, got "%s"', $this->getValueTypeName($item))
                 );
@@ -870,7 +873,7 @@ class TypedRecords implements TypedRecordsInterface
     final public function assertRecords(): static
     {
         foreach ($this->items as $item) {
-            if (!$item instanceof AbstractRecord) {
+            if (! $item instanceof AbstractRecord) {
                 throw new InvalidArgumentException(
                     sprintf('Expected AbstractRecord, got "%s"', $this->getValueTypeName($item))
                 );
@@ -883,7 +886,7 @@ class TypedRecords implements TypedRecordsInterface
     final public function validate(Closure $validator): static
     {
         foreach ($this->items as $index => $item) {
-            if (!$validator($item, $index)) {
+            if (! $validator($item, $index)) {
                 throw new InvalidArgumentException(
                     sprintf('Validation failed for item at index %d', $index)
                 );

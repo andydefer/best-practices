@@ -18,12 +18,12 @@ use Stringable;
  *
  * @template TValue of object|string|int|float|bool
  */
-interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countable, Stringable, JsonSerializable
+interface TypedRecordsInterface extends ArrayAccess, Countable, IteratorAggregate, JsonSerializable, Stringable
 {
     /**
      * Add one or multiple items.
      *
-     * @param TValue ...$items
+     * @param  TValue  ...$items
      * @return TypedRecords<TValue>
      */
     public function add(int|string|float|bool|null|AbstractRecord|TypedRecords ...$items): TypedRecords;
@@ -36,7 +36,6 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
      * @return array<TValue>
      */
     public function toArray(): array;
-
 
     /**
      * Get all items as a new TypedRecords collection.
@@ -66,7 +65,8 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
      * Map items to a new collection.
      *
      * @template TReturn
-     * @param Closure(TValue): TReturn $callback
+     *
+     * @param  Closure(TValue): TReturn  $callback
      * @return TypedRecords<TReturn>
      */
     public function map(Closure $callback): TypedRecords;
@@ -74,7 +74,7 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
     /**
      * Filter items.
      *
-     * @param Closure(TValue): bool $callback
+     * @param  Closure(TValue): bool  $callback
      * @return TypedRecords<TValue>
      */
     public function filter(Closure $callback): TypedRecords;
@@ -82,7 +82,7 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
     /**
      * Reject items.
      *
-     * @param Closure(TValue): bool $callback
+     * @param  Closure(TValue): bool  $callback
      * @return TypedRecords<TValue>
      */
     public function reject(Closure $callback): TypedRecords;
@@ -90,7 +90,7 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
     /**
      * Execute callback on each item.
      *
-     * @param Closure(TValue): void $callback
+     * @param  Closure(TValue): void  $callback
      * @return TypedRecords<TValue>
      */
     public function each(Closure $callback): TypedRecords;
@@ -122,6 +122,7 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
      * @return TypedRecords<TValue>
      */
     public function last(int $limit): TypedRecords;
+
     /**
      * Sort the collection.
      *
@@ -132,7 +133,7 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
     /**
      * Sort by a callback or key.
      *
-     * @param Closure(TValue): mixed|string $callback
+     * @param  Closure(TValue): mixed|string  $callback
      * @return TypedRecords<TValue>
      */
     public function sortBy(Closure|string $callback, bool $descending = false): TypedRecords;
@@ -154,39 +155,33 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
     /**
      * Calculate sum.
      *
-     * @param Closure(TValue): int|float|null $callback
-     * @return int|float
+     * @param  Closure(TValue): int|float|null  $callback
      */
     public function sum(?Closure $callback = null): int|float;
 
     /**
      * Calculate average.
      *
-     * @param Closure(TValue): int|float|null $callback
-     * @return float|null
+     * @param  Closure(TValue): int|float|null  $callback
      */
     public function avg(?Closure $callback = null): ?float;
 
     /**
      * Get maximum value.
      *
-     * @param Closure(TValue): int|float|string|null $callback
-     * @return int|float|string|null
+     * @param  Closure(TValue): int|float|string|null  $callback
      */
     public function max(?Closure $callback = null): int|float|string|null;
 
     /**
      * Get minimum value.
      *
-     * @param Closure(TValue): int|float|string|null $callback
-     * @return int|float|string|null
+     * @param  Closure(TValue): int|float|string|null  $callback
      */
     public function min(?Closure $callback = null): int|float|string|null;
 
     /**
      * Check if contains a value.
-     *
-     * @return bool
      */
     public function contains(int|string|float|bool|null|AbstractRecord|TypedRecords $value): bool;
 
@@ -194,7 +189,8 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
      * Get only items of a specific type.
      *
      * @template T of object|string|int|float|bool
-     * @param class-string<AbstractRecord>|string $type
+     *
+     * @param  class-string<AbstractRecord>|string  $type
      * @return TypedRecords<T>
      */
     public function ofType(string $type): TypedRecords;
@@ -231,7 +227,8 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
      * Get items of a specific record class.
      *
      * @template TRecord of AbstractRecord
-     * @param class-string<TRecord> $recordClass
+     *
+     * @param  class-string<TRecord>  $recordClass
      * @return TypedRecords<TRecord>
      */
     public function ofRecord(string $recordClass): TypedRecords;
@@ -317,7 +314,8 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
      * Flat map items.
      *
      * @template TReturn
-     * @param Closure(TValue): TypedRecords<TReturn> $callback
+     *
+     * @param  Closure(TValue): TypedRecords<TReturn>  $callback
      * @return TypedRecords<TReturn>
      */
     public function flatMap(Closure $callback): TypedRecords;
@@ -352,87 +350,86 @@ interface TypedRecordsInterface extends ArrayAccess, IteratorAggregate, Countabl
 
     /**
      * Check if collection contains only items of a specific type.
-     *
-     * @return bool
      */
     public function isOnlyType(string $type): bool;
 
     /**
      * Check if collection contains any item of a specific type.
-     *
-     * @return bool
      */
     public function containsType(string $type): bool;
 
     /**
      * Check if all items are of the same type.
-     *
-     * @return bool
      */
     public function isHomogeneous(): bool;
 
     /**
      * Check if collection contains mixed types.
-     *
-     * @return bool
      */
     public function isHeterogeneous(): bool;
 
     /**
      * Assert that all items are of a specific type.
      *
-     * @throws InvalidArgumentException
      * @return TypedRecords<TValue>
+     *
+     * @throws InvalidArgumentException
      */
     public function assertAllOfType(string $type): TypedRecords;
 
     /**
      * Assert that collection is not empty.
      *
-     * @throws InvalidArgumentException
      * @return TypedRecords<TValue>
+     *
+     * @throws InvalidArgumentException
      */
     public function assertNotEmpty(): TypedRecords;
 
     /**
      * Assert that collection contains at least one item of given type.
      *
-     * @throws InvalidArgumentException
      * @return TypedRecords<TValue>
+     *
+     * @throws InvalidArgumentException
      */
     public function assertContainsType(string $type): TypedRecords;
 
     /**
      * Assert that all items implement an interface.
      *
-     * @param class-string $interface
-     * @throws InvalidArgumentException
+     * @param  class-string  $interface
      * @return TypedRecords<TValue>
+     *
+     * @throws InvalidArgumentException
      */
     public function assertAllImplement(string $interface): TypedRecords;
 
     /**
      * Ensure all items are scalar values.
      *
-     * @throws InvalidArgumentException
      * @return TypedRecords<TValue>
+     *
+     * @throws InvalidArgumentException
      */
     public function assertScalar(): TypedRecords;
 
     /**
      * Ensure all items are records.
      *
-     * @throws InvalidArgumentException
      * @return TypedRecords<AbstractRecord>
+     *
+     * @throws InvalidArgumentException
      */
     public function assertRecords(): TypedRecords;
 
     /**
      * Validate each item with a custom callback.
      *
-     * @param Closure(TValue, int): bool $validator
-     * @throws InvalidArgumentException
+     * @param  Closure(TValue, int): bool  $validator
      * @return TypedRecords<TValue>
+     *
+     * @throws InvalidArgumentException
      */
     public function validate(Closure $validator): TypedRecords;
 }

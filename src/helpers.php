@@ -12,11 +12,12 @@ if (! function_exists('best_practices_limit')) {
     }
 }
 
-if (!function_exists('typed_records')) {
+if (! function_exists('typed_records')) {
     /**
      * Create a new typed record collection.
      *
      * @template T
+     *
      * @param  class-string<T>|string  ...$types
      * @return TypedRecords<T>
      */

@@ -21,7 +21,7 @@ final class NumberTypedRecords extends AbstractNumberTypedRecords
      */
     public function zero(): self
     {
-        return $this->filter(fn($item) => $item == 0);
+        return $this->filter(fn ($item) => $item == 0);
     }
 
     /**
@@ -29,6 +29,6 @@ final class NumberTypedRecords extends AbstractNumberTypedRecords
      */
     public function nonNegative(): self
     {
-        return $this->filter(fn($item) => $item >= 0);
+        return $this->filter(fn ($item) => $item >= 0);
     }
 }

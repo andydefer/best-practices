@@ -8,7 +8,7 @@ use AndyDefer\BestPractices\Collections\TypedRecords;
 
 /**
  * Collection typée pour les booléens.
- * 
+ *
  * @extends TypedRecords<bool>
  */
 final class BoolTypedRecords extends TypedRecords
@@ -23,7 +23,7 @@ final class BoolTypedRecords extends TypedRecords
      */
     public function trueOnly(): self
     {
-        return $this->filter(fn($item) => $item === true);
+        return $this->filter(fn ($item) => $item === true);
     }
 
     /**
@@ -31,7 +31,7 @@ final class BoolTypedRecords extends TypedRecords
      */
     public function falseOnly(): self
     {
-        return $this->filter(fn($item) => $item === false);
+        return $this->filter(fn ($item) => $item === false);
     }
 
     /**

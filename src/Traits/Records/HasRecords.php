@@ -70,7 +70,6 @@ trait HasRecords
     /**
      * Converts a Traversable object to a normalized array.
      *
-     * @param  Traversable  $traversable
      * @return array<int|string, mixed>
      */
     protected function normalizeTraversable(Traversable $traversable): array
@@ -86,9 +85,6 @@ trait HasRecords
 
     /**
      * Converts an Enum to its serializable representation.
-     *
-     * @param  UnitEnum  $enum
-     * @return string|int
      */
     protected function normalizeEnum(UnitEnum $enum): string|int
     {

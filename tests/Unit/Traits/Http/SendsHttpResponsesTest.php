@@ -238,7 +238,7 @@ final class SendsHttpResponsesTest extends TestCase
         $this->assertInstanceOf(BinaryFileResponse::class, $response);
         $this->assertSame(200, $response->getStatusCode());
         $this->assertStringContainsString(
-            'inline; filename="' . $customFileName . '"',
+            'inline; filename="'.$customFileName.'"',
             $response->headers->get('Content-Disposition')
         );
 
@@ -256,7 +256,7 @@ final class SendsHttpResponsesTest extends TestCase
 
         // Assert
         $this->assertStringContainsString(
-            'inline; filename="' . $expectedFileName . '"',
+            'inline; filename="'.$expectedFileName.'"',
             $response->headers->get('Content-Disposition')
         );
 

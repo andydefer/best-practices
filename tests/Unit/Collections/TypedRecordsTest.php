@@ -6,8 +6,6 @@ namespace AndyDefer\BestPractices\Tests\Unit\Collections;
 
 use AndyDefer\BestPractices\Collections\TypedRecords;
 use AndyDefer\BestPractices\Records\AbstractRecord;
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 use AndyDefer\BestPractices\Tests\Fixtures\Records\TestProductRecord;
 use AndyDefer\BestPractices\Tests\Fixtures\Records\TestUserRecord;
 use InvalidArgumentException;
@@ -139,7 +137,7 @@ final class TypedRecordsTest extends TestCase
         $this->expectExceptionMessage('At least one type must be provided');
 
         // Act
-        new TypedRecords();
+        new TypedRecords;
     }
 
     public function test_construct_throws_exception_for_invalid_class_type(): void
@@ -261,7 +259,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 3);
 
         // Act
-        $mapped = $collection->map(fn($item) => $item * 2);
+        $mapped = $collection->map(fn ($item) => $item * 2);
 
         // Assert
         $this->assertCount(3, $mapped->toArray());
@@ -277,7 +275,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 3);
 
         // Act
-        $mapped = $collection->map(fn($item) => "Number: {$item}");
+        $mapped = $collection->map(fn ($item) => "Number: {$item}");
 
         // Assert
         $this->assertSame(['string'], $mapped->getAllowedTypes());
@@ -291,7 +289,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 0);
 
         // Act
-        $mapped = $collection->map(fn($item) => $item > 0);
+        $mapped = $collection->map(fn ($item) => $item > 0);
 
         // Assert
         $this->assertSame(['bool'], $mapped->getAllowedTypes());
@@ -305,7 +303,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 3);
 
         // Act
-        $mapped = $collection->map(fn($item) => $item / 2.0);
+        $mapped = $collection->map(fn ($item) => $item / 2.0);
 
         // Assert
         $this->assertSame(['float'], $mapped->getAllowedTypes());
@@ -319,7 +317,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add('Product A', 'Product B');
 
         // Act
-        $mapped = $collection->map(fn($item) => new TestProductRecord(name: $item));
+        $mapped = $collection->map(fn ($item) => new TestProductRecord(name: $item));
 
         // Assert
         $this->assertSame([TestProductRecord::class], $mapped->getAllowedTypes());
@@ -335,7 +333,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add('hello', 'world');
 
         // Act
-        $mapped = $collection->map(fn($item) => (new TypedRecords('string'))->add($item));
+        $mapped = $collection->map(fn ($item) => (new TypedRecords('string'))->add($item));
 
         // Assert
         $this->assertSame([TypedRecords::class], $mapped->getAllowedTypes());
@@ -349,7 +347,7 @@ final class TypedRecordsTest extends TestCase
         $collection = new TypedRecords('int');
 
         // Act
-        $mapped = $collection->map(fn($item) => $item * 2);
+        $mapped = $collection->map(fn ($item) => $item * 2);
 
         // Assert
         $this->assertSame(['int'], $mapped->getAllowedTypes());
@@ -365,7 +363,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 3, 4, 5);
 
         // Act
-        $filtered = $collection->filter(fn($item) => $item > 3);
+        $filtered = $collection->filter(fn ($item) => $item > 3);
 
         // Assert
         $this->assertCount(2, $filtered->toArray());
@@ -380,7 +378,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 3);
 
         // Act
-        $filtered = $collection->filter(fn($item) => $item > 10);
+        $filtered = $collection->filter(fn ($item) => $item > 10);
 
         // Assert
         $this->assertEmpty($filtered->toArray());
@@ -394,7 +392,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 3, 4, 5);
 
         // Act
-        $rejected = $collection->reject(fn($item) => $item > 3);
+        $rejected = $collection->reject(fn ($item) => $item > 3);
 
         // Assert
         $this->assertCount(3, $rejected->toArray());
@@ -426,7 +424,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2);
 
         // Act
-        $result = $collection->each(fn($item) => $item * 2);
+        $result = $collection->each(fn ($item) => $item * 2);
 
         // Assert
         $this->assertSame($collection, $result);
@@ -449,7 +447,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE FIRST ET LAST ==========
 
-    public function test_firstItem_returns_first_item(): void
+    public function test_first_item_returns_first_item(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -462,7 +460,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame('first', $result);
     }
 
-    public function test_firstItem_returns_null_when_collection_is_empty(): void
+    public function test_first_item_returns_null_when_collection_is_empty(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -489,7 +487,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame(['first', 'second'], $result->toArray());
     }
 
-    public function test_lastItem_returns_last_item(): void
+    public function test_last_item_returns_last_item(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -502,7 +500,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame('third', $result);
     }
 
-    public function test_lastItem_returns_null_when_collection_is_empty(): void
+    public function test_last_item_returns_null_when_collection_is_empty(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -571,7 +569,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE SORT_BY ==========
 
-    public function test_sortBy_orders_using_callback(): void
+    public function test_sort_by_orders_using_callback(): void
     {
         // Arrange
         $collection = new TypedRecords(TestProductRecord::class);
@@ -582,7 +580,7 @@ final class TypedRecordsTest extends TestCase
         );
 
         // Act
-        $sorted = $collection->sortBy(fn($item) => $item->name);
+        $sorted = $collection->sortBy(fn ($item) => $item->name);
 
         // Assert
         $this->assertSame('Product A', $sorted->toArray()[0]->name);
@@ -590,7 +588,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame('Product C', $sorted->toArray()[2]->name);
     }
 
-    public function test_sortBy_orders_using_string_key(): void
+    public function test_sort_by_orders_using_string_key(): void
     {
         // Arrange
         $collection = new TypedRecords(TestProductRecord::class);
@@ -609,14 +607,14 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame(300, $sorted->toArray()[2]->price);
     }
 
-    public function test_sortBy_descending_orders_descending(): void
+    public function test_sort_by_descending_orders_descending(): void
     {
         // Arrange
         $collection = new TypedRecords('int');
         $collection->add(1, 2, 3);
 
         // Act
-        $sorted = $collection->sortBy(fn($item) => $item, true);
+        $sorted = $collection->sortBy(fn ($item) => $item, true);
 
         // Assert
         $this->assertSame([3, 2, 1], $sorted->toArray());
@@ -706,7 +704,7 @@ final class TypedRecordsTest extends TestCase
         );
 
         // Act
-        $result = $collection->sum(fn($item) => $item->price);
+        $result = $collection->sum(fn ($item) => $item->price);
 
         // Assert
         $this->assertSame(600, $result);
@@ -763,7 +761,7 @@ final class TypedRecordsTest extends TestCase
         );
 
         // Act
-        $result = $collection->avg(fn($item) => $item->price);
+        $result = $collection->avg(fn ($item) => $item->price);
 
         // Assert
         $this->assertSame(200.0, $result);
@@ -807,7 +805,7 @@ final class TypedRecordsTest extends TestCase
         );
 
         // Act
-        $result = $collection->max(fn($item) => $item->price);
+        $result = $collection->max(fn ($item) => $item->price);
 
         // Assert
         $this->assertSame(300, $result);
@@ -849,7 +847,7 @@ final class TypedRecordsTest extends TestCase
         );
 
         // Act
-        $result = $collection->min(fn($item) => $item->price);
+        $result = $collection->min(fn ($item) => $item->price);
 
         // Assert
         $this->assertSame(100, $result);
@@ -902,7 +900,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS D'ETAT ==========
 
-    public function test_isEmpty_returns_true_for_empty_collection(): void
+    public function test_is_empty_returns_true_for_empty_collection(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -911,7 +909,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertTrue($collection->isEmpty());
     }
 
-    public function test_isEmpty_returns_false_for_non_empty_collection(): void
+    public function test_is_empty_returns_false_for_non_empty_collection(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -921,7 +919,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertFalse($collection->isEmpty());
     }
 
-    public function test_isNotEmpty_returns_true_for_non_empty_collection(): void
+    public function test_is_not_empty_returns_true_for_non_empty_collection(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -931,7 +929,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertTrue($collection->isNotEmpty());
     }
 
-    public function test_isNotEmpty_returns_false_for_empty_collection(): void
+    public function test_is_not_empty_returns_false_for_empty_collection(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -978,9 +976,9 @@ final class TypedRecordsTest extends TestCase
         // Arrange, Act & Assert
         $result = (new TypedRecords('int'))
             ->add(5, 2, 8, 1, 3)
-            ->filter(fn($item) => $item > 2)
+            ->filter(fn ($item) => $item > 2)
             ->sort()
-            ->map(fn($item) => $item * 2)
+            ->map(fn ($item) => $item * 2)
             ->toArray();
 
         $this->assertSame([6, 10, 16], $result);
@@ -999,9 +997,9 @@ final class TypedRecordsTest extends TestCase
 
         // Act
         $result = $collection
-            ->filter(fn($item) => $item->isFeatured === true)
+            ->filter(fn ($item) => $item->isFeatured === true)
             ->sortBy('price')
-            ->map(fn($item) => $item->name)
+            ->map(fn ($item) => $item->name)
             ->toArray();
 
         // Assert
@@ -1017,8 +1015,8 @@ final class TypedRecordsTest extends TestCase
         $original->add(1, 2, 3);
 
         // Act
-        $filtered = $original->filter(fn($item) => $item > 1);
-        $mapped = $original->map(fn($item) => $item * 2);
+        $filtered = $original->filter(fn ($item) => $item > 1);
+        $mapped = $original->map(fn ($item) => $item * 2);
         $sorted = $original->sort();
 
         // Assert
@@ -1037,7 +1035,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(new TestProductRecord(name: 'Product A'), 'just a string');
 
         // Act
-        $filtered = $collection->filter(fn($item) => $item instanceof TestProductRecord);
+        $filtered = $collection->filter(fn ($item) => $item instanceof TestProductRecord);
 
         // Assert
         $this->assertSame([TestProductRecord::class, 'string'], $filtered->getAllowedTypes());
@@ -1050,7 +1048,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(new TestProductRecord(name: 'Product A'));
 
         // Act
-        $mapped = $collection->map(fn($item) => $item->name);
+        $mapped = $collection->map(fn ($item) => $item->name);
 
         // Assert
         $this->assertSame(['string'], $mapped->getAllowedTypes());
@@ -1058,7 +1056,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE OF TYPE ==========
 
-    public function test_ofType_returns_only_items_of_specific_scalar_type(): void
+    public function test_of_type_returns_only_items_of_specific_scalar_type(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string', 'float');
@@ -1072,7 +1070,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame(['hello', 'world'], $result->toArray());
     }
 
-    public function test_ofType_returns_only_items_of_specific_record_type(): void
+    public function test_of_type_returns_only_items_of_specific_record_type(): void
     {
         // Arrange
         $product = new TestProductRecord(name: 'Product');
@@ -1088,7 +1086,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame([$product], $result->toArray());
     }
 
-    public function test_ofType_returns_empty_collection_when_no_match(): void
+    public function test_of_type_returns_empty_collection_when_no_match(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1104,7 +1102,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE EXCEPT TYPE ==========
 
-    public function test_exceptType_removes_items_of_specific_scalar_type(): void
+    public function test_except_type_removes_items_of_specific_scalar_type(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string', 'float');
@@ -1118,7 +1116,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame(['hello', 3.14], $result->toArray());
     }
 
-    public function test_exceptType_removes_items_of_specific_record_type(): void
+    public function test_except_type_removes_items_of_specific_record_type(): void
     {
         // Arrange
         $product = new TestProductRecord(name: 'Product');
@@ -1134,7 +1132,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame([$product], $result->toArray());
     }
 
-    public function test_exceptType_throws_exception_when_excluding_all_allowed_types(): void
+    public function test_except_type_throws_exception_when_excluding_all_allowed_types(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Cannot exclude all allowed types');
@@ -1149,7 +1147,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE GET TYPES ==========
 
-    public function test_getTypes_returns_distinct_scalar_types_present(): void
+    public function test_get_types_returns_distinct_scalar_types_present(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string', 'float', 'bool');
@@ -1163,7 +1161,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertEqualsCanonicalizing(['int', 'string', 'float', 'bool'], $result->toArray());
     }
 
-    public function test_getTypes_returns_distinct_record_types_present(): void
+    public function test_get_types_returns_distinct_record_types_present(): void
     {
         // Arrange
         $product = new TestProductRecord(name: 'Product');
@@ -1179,7 +1177,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertEqualsCanonicalizing([TestProductRecord::class, TestUserRecord::class], $result->toArray());
     }
 
-    public function test_getTypes_returns_empty_collection_when_no_items(): void
+    public function test_get_types_returns_empty_collection_when_no_items(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1260,7 +1258,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE OF RECORD ==========
 
-    public function test_ofRecord_returns_only_items_of_specific_record_class(): void
+    public function test_of_record_returns_only_items_of_specific_record_class(): void
     {
         // Arrange
         $product = new TestProductRecord(name: 'Product');
@@ -1276,7 +1274,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame([$product], $result->toArray());
     }
 
-    public function test_ofRecord_throws_exception_for_non_record_class(): void
+    public function test_of_record_throws_exception_for_non_record_class(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/must extend/');
@@ -1290,7 +1288,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE ANY RECORD ==========
 
-    public function test_anyRecord_returns_all_records_regardless_of_type(): void
+    public function test_any_record_returns_all_records_regardless_of_type(): void
     {
         // Arrange
         $product = new TestProductRecord(name: 'Product');
@@ -1341,7 +1339,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE WHERE NOT NULL ==========
 
-    public function test_whereNotNull_returns_items_with_non_null_property(): void
+    public function test_where_not_null_returns_items_with_non_null_property(): void
     {
         // Arrange
         $product1 = new TestProductRecord(name: 'Product A', price: 100);
@@ -1360,7 +1358,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE WHERE NULL ==========
 
-    public function test_whereNull_returns_items_with_null_property(): void
+    public function test_where_null_returns_items_with_null_property(): void
     {
         // Arrange
         $product1 = new TestProductRecord(name: 'Product A', price: 100);
@@ -1478,7 +1476,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add($product1, $product2, $product3);
 
         // Act
-        $result = $collection->unique(fn($item) => $item->price);
+        $result = $collection->unique(fn ($item) => $item->price);
 
         // Assert
         $this->assertCount(2, $result->toArray());
@@ -1541,7 +1539,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE FLAT MAP ==========
 
-    public function test_flatMap_flattens_nested_collections(): void
+    public function test_flat_map_flattens_nested_collections(): void
     {
         // Arrange
         $collection = new TypedRecords(TypedRecords::class);
@@ -1552,7 +1550,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add($inner1, $inner2);
 
         // Act
-        $result = $collection->flatMap(fn($item) => $item);
+        $result = $collection->flatMap(fn ($item) => $item);
 
         // Assert
         $this->assertCount(4, $result->toArray());
@@ -1566,7 +1564,7 @@ final class TypedRecordsTest extends TestCase
         // Arrange
         $collection = new TypedRecords('int');
         $collection->add(1, 2, 3);
-        $filtered = $collection->filter(fn($item) => $item > 1);
+        $filtered = $collection->filter(fn ($item) => $item > 1);
 
         // Act
         $result = $filtered->values();
@@ -1578,7 +1576,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE FILTER NULL ==========
 
-    public function test_filterNull_removes_null_values(): void
+    public function test_filter_null_removes_null_values(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'null');
@@ -1663,7 +1661,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE IS ONLY TYPE ==========
 
-    public function test_isOnlyType_returns_true_when_all_items_match_type(): void
+    public function test_is_only_type_returns_true_when_all_items_match_type(): void
     {
         // Arrange
         $collection = new TypedRecords('int');
@@ -1673,7 +1671,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertTrue($collection->isOnlyType('int'));
     }
 
-    public function test_isOnlyType_returns_false_when_any_item_differs(): void
+    public function test_is_only_type_returns_false_when_any_item_differs(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1683,7 +1681,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertFalse($collection->isOnlyType('int'));
     }
 
-    public function test_isOnlyType_returns_true_for_empty_collection(): void
+    public function test_is_only_type_returns_true_for_empty_collection(): void
     {
         // Arrange
         $collection = new TypedRecords('int');
@@ -1694,7 +1692,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE CONTAINS TYPE ==========
 
-    public function test_containsType_returns_true_when_type_exists(): void
+    public function test_contains_type_returns_true_when_type_exists(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1704,7 +1702,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertTrue($collection->containsType('int'));
     }
 
-    public function test_containsType_returns_false_when_type_not_exists(): void
+    public function test_contains_type_returns_false_when_type_not_exists(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1716,7 +1714,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE IS HOMOGENEOUS ==========
 
-    public function test_isHomogeneous_returns_true_when_all_items_same_type(): void
+    public function test_is_homogeneous_returns_true_when_all_items_same_type(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1726,7 +1724,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertTrue($collection->isHomogeneous());
     }
 
-    public function test_isHomogeneous_returns_false_when_items_have_different_types(): void
+    public function test_is_homogeneous_returns_false_when_items_have_different_types(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1738,7 +1736,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE IS HETEROGENEOUS ==========
 
-    public function test_isHeterogeneous_returns_true_when_items_have_different_types(): void
+    public function test_is_heterogeneous_returns_true_when_items_have_different_types(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1748,7 +1746,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertTrue($collection->isHeterogeneous());
     }
 
-    public function test_isHeterogeneous_returns_false_when_all_items_same_type(): void
+    public function test_is_heterogeneous_returns_false_when_all_items_same_type(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1760,7 +1758,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE ASSERT ALL OF TYPE ==========
 
-    public function test_assertAllOfType_returns_self_when_all_items_match_type(): void
+    public function test_assert_all_of_type_returns_self_when_all_items_match_type(): void
     {
         // Arrange
         $collection = new TypedRecords('int');
@@ -1773,7 +1771,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame($collection, $result);
     }
 
-    public function test_assertAllOfType_throws_exception_when_any_item_differs(): void
+    public function test_assert_all_of_type_throws_exception_when_any_item_differs(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Expected all items to be of type "int"');
@@ -1788,7 +1786,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE ASSERT NOT EMPTY ==========
 
-    public function test_assertNotEmpty_returns_self_when_collection_not_empty(): void
+    public function test_assert_not_empty_returns_self_when_collection_not_empty(): void
     {
         // Arrange
         $collection = new TypedRecords('string');
@@ -1801,7 +1799,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame($collection, $result);
     }
 
-    public function test_assertNotEmpty_throws_exception_when_collection_empty(): void
+    public function test_assert_not_empty_throws_exception_when_collection_empty(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Collection is empty');
@@ -1815,7 +1813,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE ASSERT CONTAINS TYPE ==========
 
-    public function test_assertContainsType_returns_self_when_type_exists(): void
+    public function test_assert_contains_type_returns_self_when_type_exists(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string');
@@ -1828,7 +1826,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame($collection, $result);
     }
 
-    public function test_assertContainsType_throws_exception_when_type_not_exists(): void
+    public function test_assert_contains_type_throws_exception_when_type_not_exists(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Collection does not contain type "float"');
@@ -1843,7 +1841,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE ASSERT ALL IMPLEMENT ==========
 
-    public function test_assertAllImplement_returns_self_when_all_items_implement_interface(): void
+    public function test_assert_all_implement_returns_self_when_all_items_implement_interface(): void
     {
         // Arrange
         $product1 = new TestProductRecord(name: 'Product A');
@@ -1858,7 +1856,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame($collection, $result);
     }
 
-    public function test_assertAllImplement_throws_exception_when_item_does_not_implement_interface(): void
+    public function test_assert_all_implement_throws_exception_when_item_does_not_implement_interface(): void
     {
         $this->expectException(InvalidArgumentException::class);
 
@@ -1872,7 +1870,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE ASSERT SCALAR ==========
 
-    public function test_assertScalar_returns_self_when_all_items_are_scalar(): void
+    public function test_assert_scalar_returns_self_when_all_items_are_scalar(): void
     {
         // Arrange
         $collection = new TypedRecords('int', 'string', 'float', 'bool');
@@ -1885,7 +1883,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame($collection, $result);
     }
 
-    public function test_assertScalar_throws_exception_when_any_item_is_not_scalar(): void
+    public function test_assert_scalar_throws_exception_when_any_item_is_not_scalar(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Expected scalar value');
@@ -1900,7 +1898,7 @@ final class TypedRecordsTest extends TestCase
 
     // ========== TESTS DE ASSERT RECORDS ==========
 
-    public function test_assertRecords_returns_self_when_all_items_are_records(): void
+    public function test_assert_records_returns_self_when_all_items_are_records(): void
     {
         // Arrange
         $product1 = new TestProductRecord(name: 'Product A');
@@ -1915,7 +1913,7 @@ final class TypedRecordsTest extends TestCase
         $this->assertSame($collection, $result);
     }
 
-    public function test_assertRecords_throws_exception_when_any_item_is_not_record(): void
+    public function test_assert_records_throws_exception_when_any_item_is_not_record(): void
     {
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Expected AbstractRecord');
@@ -1937,7 +1935,7 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, 3);
 
         // Act
-        $result = $collection->validate(fn($item, $index) => $item > 0);
+        $result = $collection->validate(fn ($item, $index) => $item > 0);
 
         // Assert
         $this->assertSame($collection, $result);
@@ -1953,6 +1951,6 @@ final class TypedRecordsTest extends TestCase
         $collection->add(1, 2, -3, 4);
 
         // Act
-        $collection->validate(fn($item, $index) => $item > 0);
+        $collection->validate(fn ($item, $index) => $item > 0);
     }
 }

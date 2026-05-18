@@ -21,7 +21,7 @@ final class FloatTypedRecords extends AbstractNumberTypedRecords
      */
     public function round(int $precision = 0): self
     {
-        return $this->map(fn($item) => round($item, $precision));
+        return $this->map(fn ($item) => round($item, $precision));
     }
 
     /**
@@ -29,7 +29,7 @@ final class FloatTypedRecords extends AbstractNumberTypedRecords
      */
     public function ceil(): self
     {
-        return $this->map(fn($item) => ceil($item));
+        return $this->map(fn ($item) => ceil($item));
     }
 
     /**
@@ -37,7 +37,7 @@ final class FloatTypedRecords extends AbstractNumberTypedRecords
      */
     public function floor(): self
     {
-        return $this->map(fn($item) => floor($item));
+        return $this->map(fn ($item) => floor($item));
     }
 
     /**
@@ -46,6 +46,6 @@ final class FloatTypedRecords extends AbstractNumberTypedRecords
      */
     public function format(int $decimals = 2): self
     {
-        return $this->map(fn($item) => round($item, $decimals));
+        return $this->map(fn ($item) => round($item, $decimals));
     }
 }

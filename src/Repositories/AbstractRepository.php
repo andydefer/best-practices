@@ -64,13 +64,14 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
      * Verifies that the given record is of the correct type for this repository.
      *
      * @param  Recordable  $record  The record to validate
+     *
      * @throws \InvalidArgumentException When the record type is incorrect
      */
     final protected function validateRecordType(Recordable $record): void
     {
         $expectedClass = $this->info()->recordClass;
 
-        if (!$record instanceof $expectedClass) {
+        if (! $record instanceof $expectedClass) {
             throw new \InvalidArgumentException(sprintf(
                 'Expected record of type %s, got %s',
                 $expectedClass,
@@ -131,7 +132,7 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
         return DB::transaction(function () use ($id, $record): Model {
             $model = $this->find($id);
 
-            if (!$model) {
+            if (! $model) {
                 throw new \RuntimeException(sprintf(
                     '%s with id %d not found',
                     $this->info()->modelClass,
@@ -153,7 +154,7 @@ abstract class AbstractRepository implements AbstractRepositoryInterface
         return DB::transaction(function () use ($id): bool {
             $model = $this->find($id);
 
-            if (!$model) {
+            if (! $model) {
                 return false;
             }
 

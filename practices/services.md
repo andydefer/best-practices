@@ -115,7 +115,7 @@ final class NotificationService
 |---------|---------|--------|------|
 | **Rôle** | Logique métier | Orchestration | Effet de bord unique ou même nature |
 | **Retour** | Valeur (scalaire, Record, array) | `void` | `mixed` ou `void` |
-| **Transaction DB** | ❌ Non | ✅ Oui | ❌ Non |
+| **Transaction DB** | ✅ Oui (si nécessaire) | ❌ Non | ❌ Non |
 | **Logique métier** | ✅ Oui | ❌ Non | ❌ Non |
 | **Plusieurs méthodes** | ✅ Oui (même domaine) | ❌ Non (une seule) | ❌ Non (une seule) |
 | **Peut utiliser** | Services, Repositories, Tasks, Workers | Tasks, Services, Repositories | Services, Repositories |
@@ -259,15 +259,14 @@ final class NotificationController extends Controller
 
 ### 5.1 Types autorisés en entrée
 
-> **Nous recommandons de prendre en paramètre des `Record`, des `scalaires`, des `Enum` ou des `array` de ces types.**
+> **Nous recommandons de prendre en paramètre des `Record`, des `scalaires`, des `Enum` ou des `TypedRecords`.**
 
 | Type | Recommandation | Exemple |
 |------|----------------|---------|
 | `Record` | ✅ Recommandé | `function calculate(OrderRecord $record): float` |
 | `scalaire` (int, float, string, bool) | ✅ Recommandé | `function calculateTax(float $subtotal, string $country): float` |
 | `Enum` | ✅ Recommandé | `function filterByRole(UserRole $role): array` |
-| `array<Record>` | ✅ Recommandé | `function processBatch(array $records): array` |
-| `array<scalaire>` | ✅ Recommandé | `function findByIds(array $ids): array` |
+| `TypedRecords` | ✅ Recommandé | `function processBatch(TypedRecords $records): array` |
 | `Model` | ❌ **STRICTEMENT INTERDIT** | Un Service ne doit jamais recevoir de Model |
 | `Data` | ❌ **STRICTEMENT INTERDIT** | Un Service ne doit jamais recevoir de Data |
 
@@ -275,15 +274,14 @@ final class NotificationController extends Controller
 
 ### 5.2 Types autorisés en sortie
 
-> **Nous recommandons de retourner des `Record`, des `scalaires`, des `Enum` ou des `array` de ces types.**
+> **Nous recommandons de retourner des `Record`, des `scalaires`, des `Enum` ou des `TypedRecords`.**
 
 | Type | Recommandation | Exemple |
 |------|----------------|---------|
 | `Record` | ✅ Recommandé | `return new PriceRecord(...)` |
 | `scalaire` (int, float, string, bool) | ✅ Recommandé | `return $total` |
 | `Enum` | ✅ Recommandé | `return UserRole::ADMIN` |
-| `array<Record>` | ✅ Recommandé | `return $slots` |
-| `array<scalaire>` | ✅ Recommandé | `return $ids` |
+| `TypedRecords` | ✅ Recommandé | `return $slots` |
 | `Model` | ⚠️ Acceptable mais moins bon | Préférer un `Record` |
 | `Data` | ❌ Interdit | Les Services ne doivent pas connaître la couche API |
 
@@ -322,9 +320,259 @@ final class PriceCalculatorService
 
 ---
 
-## 6. Règles fondamentales
+## 6. Règle : Écrire du code testable unitairement (⚠️ RÈGLE ABSOLUE)
 
-### 6.1 Nommage
+> **Un Service DOIT être testable unitairement. Cela signifie que toutes ses dépendances doivent pouvoir être mockées et que sa logique métier doit pouvoir être isolée.**
+
+### 6.1 Ce qui rend un Service testable
+
+| Caractéristique | Pourquoi c'est testable |
+|-----------------|------------------------|
+| **Dépendances injectées via constructeur** | On peut les remplacer par des mocks |
+| **Pas d'effets de bord directs** | On n'a pas à mocker des appels statiques |
+| **Délégation aux Tasks/Workers** | Les effets de bord sont mockables |
+| **Entrées/Sorties typées (Record, scalaire, Enum, TypedRecords)** | Données prévisibles et structurées |
+| **Interdiction des Models et Data** | Pas de coupling avec Eloquent ou l'API |
+| **Logique métier pure (calculs, transformations, validations)** | Pas de dépendances externes |
+
+### 6.2 Ce qui rend un Service NON testable (À ÉVITER)
+
+```php
+// ❌ MAUVAIS - Service NON testable
+final class BadService
+{
+    public function execute(int $id): void
+    {
+        // ❌ Appel statique (non mockable)
+        Log::info('Processing user', ['id' => $id]);
+        
+        // ❌ Model direct (non mockable proprement)
+        $user = User::find($id);
+        
+        // ❌ Facade Laravel (non mockable)
+        Cache::put('user_' . $id, $user);
+        
+        // ❌ Effet de bord direct (non mockable)
+        Mail::to($user->email)->send(new WelcomeEmail());
+    }
+}
+```
+
+**Pourquoi ce code n'est pas testable unitairement :**
+- `Log::info()` est un appel statique → impossible à mocker
+- `User::find()` est un appel statique → appelle VRAIMENT la base de données
+- `Cache::put()` est une facade → appel statique caché
+- `Mail::send()` est une facade → appel statique caché
+- Aucune dépendance injectée → tout est caché et statique
+
+### 6.3 Ce qui rend un Service testable (À FAIRE)
+
+```php
+// ✅ BON - Service TESTABLE
+final class GoodService
+{
+    public function __construct(
+        private readonly LoggerInterface $logger,
+        private readonly UserRepository $userRepository,
+        private readonly CacheInterface $cache,
+        private readonly MailerInterface $mailer,
+        private readonly UserValidatorService $validator,
+    ) {}
+    
+    public function execute(int $id): void
+    {
+        // Logique métier testable
+        if (!$this->validator->isValidUserId($id)) {
+            throw new InvalidUserIdException();
+        }
+        
+        // Appel au Repository (mockable)
+        $user = $this->userRepository->find($id);
+        
+        if ($user === null) {
+            return;
+        }
+        
+        // Appels aux interfaces (toutes mockables)
+        $this->logger->info('Processing user', ['id' => $id]);
+        $this->cache->set('user_' . $id, $user);
+        $this->mailer->to($user->email)->send(new WelcomeEmail());
+    }
+}
+```
+
+### 6.4 Test unitaire d'un Service
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit\Services;
+
+use App\Services\GoodService;
+use App\Contracts\LoggerInterface;
+use App\Repositories\UserRepository;
+use App\Contracts\CacheInterface;
+use App\Contracts\MailerInterface;
+use App\Services\UserValidatorService;
+use App\Records\UserRecord;
+use Tests\TestCase;
+
+final class GoodServiceTest extends TestCase
+{
+    private GoodService $service;
+    private LoggerInterface $logger;
+    private UserRepository $userRepository;
+    private CacheInterface $cache;
+    private MailerInterface $mailer;
+    private UserValidatorService $validator;
+    
+    protected function setUp(): void
+    {
+        parent::setUp();
+        
+        $this->logger = $this->createMock(LoggerInterface::class);
+        $this->userRepository = $this->createMock(UserRepository::class);
+        $this->cache = $this->createMock(CacheInterface::class);
+        $this->mailer = $this->createMock(MailerInterface::class);
+        $this->validator = $this->createMock(UserValidatorService::class);
+        
+        $this->service = new GoodService(
+            $this->logger,
+            $this->userRepository,
+            $this->cache,
+            $this->mailer,
+            $this->validator,
+        );
+    }
+    
+    public function test_execute_logs_and_caches_and_mails_when_user_found(): void
+    {
+        $user = new UserRecord(id: 1, email: 'john@example.com');
+        
+        $this->validator
+            ->expects($this->once())
+            ->method('isValidUserId')
+            ->with(1)
+            ->willReturn(true);
+        
+        $this->userRepository
+            ->expects($this->once())
+            ->method('find')
+            ->with(1)
+            ->willReturn($user);
+        
+        $this->logger
+            ->expects($this->once())
+            ->method('info')
+            ->with('Processing user', ['id' => 1]);
+        
+        $this->cache
+            ->expects($this->once())
+            ->method('set')
+            ->with('user_1', $user);
+        
+        $this->mailer
+            ->expects($this->once())
+            ->method('to')
+            ->with('john@example.com')
+            ->willReturn($this->mailer);
+        
+        $this->mailer
+            ->expects($this->once())
+            ->method('send')
+            ->with($this->isInstanceOf(WelcomeEmail::class));
+        
+        $this->service->execute(1);
+    }
+    
+    public function test_execute_does_nothing_when_user_not_found(): void
+    {
+        $this->validator
+            ->expects($this->once())
+            ->method('isValidUserId')
+            ->with(999)
+            ->willReturn(true);
+        
+        $this->userRepository
+            ->expects($this->once())
+            ->method('find')
+            ->with(999)
+            ->willReturn(null);
+        
+        $this->logger->expects($this->never())->method('info');
+        $this->cache->expects($this->never())->method('set');
+        $this->mailer->expects($this->never())->method('send');
+        
+        $this->service->execute(999);
+    }
+    
+    public function test_execute_throws_exception_when_user_id_invalid(): void
+    {
+        $this->validator
+            ->expects($this->once())
+            ->method('isValidUserId')
+            ->with(0)
+            ->willReturn(false);
+        
+        $this->userRepository->expects($this->never())->method('find');
+        
+        $this->expectException(InvalidUserIdException::class);
+        
+        $this->service->execute(0);
+    }
+}
+```
+
+### 6.5 Règle d'or pour la testabilité
+
+> **ZÉRO appel statique. TOUTES les dépendances injectées. Si vous voyez `Log::`, `Mail::`, `Http::`, `Cache::`, `DB::`, `User::find()`, `Model::create()` ou toute Facade Laravel dans un Service, c'est une erreur.**
+
+```php
+// ✅ Ce qui est testable
+final class TestableService
+{
+    public function __construct(
+        private readonly LoggerInterface $logger,
+        private readonly UserRepository $userRepository,
+        private readonly CacheInterface $cache,
+        private readonly MailerInterface $mailer,
+    ) {}
+}
+
+// ❌ Ce qui ne l'est PAS
+final class UntestableService
+{
+    public function execute(): void
+    {
+        Log::info('message');           // ❌ Appel statique
+        User::find(1);                  // ❌ Appel statique (Model)
+        Cache::put('key', 'value');     // ❌ Facade
+        Mail::send($email);             // ❌ Facade
+        DB::table('users')->get();      // ❌ Facade
+        Http::get($url);                // ❌ Facade
+    }
+}
+```
+
+### 6.6 Récapitulatif des interdictions pour la testabilité
+
+| Interdit | Pourquoi | Alternative |
+|----------|----------|-------------|
+| `Log::info()` direct | Appel statique non mockable | Interface `LoggerInterface` injectée |
+| `User::find()` direct | Appel statique non mockable | Repository injecté |
+| `Cache::put()` direct | Facade statique non mockable | Interface `CacheInterface` injectée |
+| `Mail::send()` direct | Facade statique non mockable | Interface `MailerInterface` injectée |
+| `DB::table()` direct | Facade statique non mockable | Repository avec interface |
+| `Http::get()` direct | Facade statique non mockable | Interface `HttpClientInterface` injectée |
+| `new` dans le constructeur | Coupling caché non mockable | Injection de dépendances |
+
+---
+
+## 7. Règles fondamentales
+
+### 7.1 Nommage
 
 ```
 {Action}{Entity}Service
@@ -335,7 +583,7 @@ final class PriceCalculatorService
 | **Service pur** | `{What}CalculatorService` | `PriceCalculatorService` |
 | **Service technique** | `{What}Service` | `CacheService`, `DoctorAvailabilityService` |
 
-### 6.2 Localisation
+### 7.2 Localisation
 
 ```
 app/Services/{Domain}/{Action}{Entity}Service.php
@@ -353,7 +601,7 @@ app/Services/
     └── DoctorAvailabilityService.php
 ```
 
-### 6.3 Règle d'or
+### 7.3 Règle d'or
 
 > **Un Service ne doit jamais avoir d'effet de bord directement. Il délègue TOUJOURS les effets de bord à des Tasks ou des Workers.**
 
@@ -397,7 +645,7 @@ final class UserService
 
 ---
 
-## 7. Ce qu'un Service peut faire
+## 8. Ce qu'un Service peut faire
 
 | Action | Autorisé | Exemple |
 |--------|----------|---------|
@@ -410,7 +658,7 @@ final class UserService
 | **Retourner des Record** | ✅ Oui | `return new PriceRecord(...)` |
 
 ---
-## 8. Ce qu'un Service NE peut PAS faire
+## 9. Ce qu'un Service NE peut PAS faire
 
 | Action | Pourquoi | Alternative |
 |--------|----------|-------------|
@@ -422,8 +670,9 @@ final class UserService
 | **Prendre des `Data`** | Violation de la couche | Prendre des `Record` |
 | **Prendre des `Model`** | Violation de la couche, difficile à tester | Prendre des `Record` |
 | **Mélanger des domaines différents** | Violation SRP | Créer plusieurs Services |
+| **Appels statiques (Log, Mail, Http, Cache, DB)** | Non testable | Injecter des interfaces |
 
-### 8.1 Mélange de domaines (interdit)
+### 9.1 Mélange de domaines (interdit)
 
 ```php
 // ❌ MAUVAIS - Mélange de domaines différents
@@ -442,7 +691,7 @@ final class UserLoggerService { ... }
 
 ---
 
-## 9. Exemple complet
+## 10. Exemple complet
 
 ```php
 final class NotificationService
@@ -453,6 +702,7 @@ final class NotificationService
         private readonly SendNotificationTask $sendNotification,
         private readonly LogNotificationTask $logNotification,
         private readonly SendNotificationWorker $sendNotificationWorker, // Worker pour 3+ Tasks
+        private readonly LoggerInterface $logger,
     ) {}
     
     // Méthode 1 : notification simple (2 Tasks → acceptable dans un Service)
@@ -469,6 +719,8 @@ final class NotificationService
         // Effets de bord délégués (2 Tasks)
         $this->sendNotification->execute($enriched);
         $this->logNotification->execute($record->id, 'sent');
+        
+        $this->logger->info('Notification sent', ['id' => $record->id]);
     }
     
     // Méthode 2 : notification avec plusieurs effets de bord (3+ Tasks → Worker obligatoire)
@@ -519,29 +771,31 @@ final class NotificationService
 
 ---
 
-## 10. Tableau récapitulatif
+## 11. Tableau récapitulatif
 
 | Contrainte | Règle |
 |------------|-------|
 | **Rôle** | Logique métier (calcul, validation, transformation) |
 | **Méthodes** | Plusieurs possibles, mais TOUTES du même domaine |
-| **Entrées** | Recommandé : Record, scalaire, Enum, array (interdit : Data, Model) |
-| **Sorties** | Recommandé : Record, scalaire, Enum, array (interdit : Data) |
+| **Entrées** | Recommandé : Record, scalaire, Enum, TypedRecords (interdit : Data, Model) |
+| **Sorties** | Recommandé : Record, scalaire, Enum, TypedRecords (interdit : Data) |
 | **Simple wrapper** | ❌ Interdit (supprimer le Service) |
 | **3 Tasks dans une méthode** | ❌ Interdit (créer un Worker) |
 | **Effet de bord direct** | ❌ Interdit (déléguer à une Task) |
 | **Transaction DB** | ❌ Interdit (créer un Worker) |
+| **Appels statiques (Log, Mail, Http, Cache, DB)** | ❌ Interdit (injecter des interfaces) |
 | **Peut utiliser** | Services, Repositories, Tasks, Workers |
 | **Nommage** | `{Action}{Entity}Service` |
+| **Testabilité** | ✅ Doit être testable unitairement |
 
 ---
 
-## 11. Règle d'or
+## 12. Règle d'or
 
-> **Un Service a une logique métier. Il peut avoir plusieurs méthodes, mais toutes doivent appartenir au même domaine. Il ne prend ni ne retourne jamais de `Data`. Si vous n'avez pas de logique métier, vous n'avez pas besoin d'un Service.**
+> **Un Service a une logique métier. Il peut avoir plusieurs méthodes, mais toutes doivent appartenir au même domaine. Il ne prend ni ne retourne jamais de `Data`. ZÉRO appel statique. TOUTES les dépendances injectées. Si vous n'avez pas de logique métier, vous n'avez pas besoin d'un Service.**
 
 ```php
-// Le Service parfait : plusieurs méthodes du même domaine, logique métier pure, délégation des effets de bord
+// Le Service parfait : plusieurs méthodes du même domaine, logique métier pure, délégation des effets de bord, testable
 final class PerfectService
 {
     public function __construct(
@@ -549,6 +803,7 @@ final class PerfectService
         private readonly SomeCalculatorService $calculator,
         private readonly SomeTask $task,
         private readonly SomeWorker $worker,
+        private readonly LoggerInterface $logger,
     ) {}
     
     // Méthode 1 : logique simple (2 Tasks)
@@ -560,7 +815,7 @@ final class PerfectService
         
         // 2 Tasks → acceptable dans un Service
         $this->task->execute($output);
-        $this->logTask->execute($record->id, 'executed');
+        $this->logger->info('Executed', ['id' => $record->id]);
         
         return $output;
     }
@@ -600,3 +855,4 @@ final class PerfectService
         return new OutputRecord(...);
     }
 }
+```

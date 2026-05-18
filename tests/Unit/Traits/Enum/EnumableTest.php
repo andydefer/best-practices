@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace AndyDefer\BestPractices\Tests\Unit\Traits\Enum;
 
-use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserGrade;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 use AndyDefer\BestPractices\Tests\TestCase;
 

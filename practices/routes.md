@@ -5,7 +5,7 @@
 Les **routes** sont la configuration qui fait le lien entre une URL et une Action. Elles sont définies dans les fichiers `web.php` et `api.php`.
 
 ```
-URL → Route → Action → Response
+URL → Route → Form Request → toRecord() → Record → Action → Response
 ```
 
 ---
@@ -21,17 +21,35 @@ URL → Route → Action → Response
 
 ```php
 // ✅ BON - web.php (GET uniquement)
-Route::get('/users', fn(Web\Users\ListUsersRequest $request, Web\Users\ListUsersAction $action) => $action->run($request));
+Route::get('/users', function (Web\Users\ListUsersRequest $request, Web\Users\ListUsersAction $action) {
+    return $action->run($request->toRecord());
+});
 
 // ✅ BON - api.php (toutes les méthodes)
-Route::get('/users', fn(Api\Users\ListUsersRequest $request, Api\Users\ListUsersAction $action) => $action->run($request));
-Route::post('/users', fn(Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) => $action->run($request));
-Route::put('/users/{userId}', fn($userId, Api\Users\ReplaceUserRequest $request, Api\Users\ReplaceUserAction $action) => $action->run($userId, $request));
-Route::patch('/users/{userId}', fn($userId, Api\Users\UpdateUserRequest $request, Api\Users\UpdateUserAction $action) => $action->run($userId, $request));
-Route::delete('/users/{userId}', fn($userId, Api\Users\DeleteUserRequest $request, Api\Users\DeleteUserAction $action) => $action->run($userId, $request));
+Route::get('/users', function (Api\Users\ListUsersRequest $request, Api\Users\ListUsersAction $action) {
+    return $action->run($request->toRecord());
+});
+
+Route::post('/users', function (Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) {
+    return $action->run($request->toRecord());
+});
+
+Route::put('/users/{userId}', function ($userId, Api\Users\ReplaceUserRequest $request, Api\Users\ReplaceUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
+
+Route::patch('/users/{userId}', function ($userId, Api\Users\UpdateUserRequest $request, Api\Users\UpdateUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
+
+Route::delete('/users/{userId}', function ($userId, Api\Users\DeleteUserRequest $request, Api\Users\DeleteUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
 
 // ❌ MAUVAIS - POST dans web.php
-Route::post('/users', fn(Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) => $action->run($request));  // ❌ INTERDIT
+Route::post('/users', function (Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) {
+    return $action->run($request->toRecord());
+});  // ❌ INTERDIT
 ```
 
 ### 2.1 Pourquoi cette séparation ?
@@ -50,175 +68,260 @@ Route::post('/users', fn(Api\Users\CreateUserRequest $request, Api\Users\CreateU
 
 ```php
 // web.php
-Route::get('/users', fn(Web\Users\ListUsersRequest $request, Web\Users\ListUsersAction $action) => $action->run($request));
-Route::get('/users/{userId}', fn($userId, Web\Users\ShowUserRequest $request, Web\Users\ShowUserAction $action) => $action->run($userId, $request));
+Route::get('/users', function (Web\Users\ListUsersRequest $request, Web\Users\ListUsersAction $action) {
+    return $action->run($request->toRecord());
+});
+
+Route::get('/users/{userId}', function ($userId, Web\Users\ShowUserRequest $request, Web\Users\ShowUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
 
 // api.php
-Route::get('/users', fn(Api\Users\ListUsersRequest $request, Api\Users\ListUsersAction $action) => $action->run($request));
-Route::post('/users', fn(Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) => $action->run($request));
+Route::get('/users', function (Api\Users\ListUsersRequest $request, Api\Users\ListUsersAction $action) {
+    return $action->run($request->toRecord());
+});
+
+Route::post('/users', function (Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) {
+    return $action->run($request->toRecord());
+});
 ```
 
 ---
 
-## 4. Règle : Pas de paramètre sans être utilisé
+## 4. Règle : Une Action ne reçoit JAMAIS une Request (⚠️ RÈGLE ABSOLUE)
 
-> **⚠️ Un paramètre d'URL (`{userId}`) ou un paramètre de requête (query string) ne peut pas exister sans être passé à l'Action. Supprimez-le si vous ne l'utilisez pas.**
+> **⚠️ Une Action reçoit TOUJOURS un Record créé par la méthode `toRecord()` de la Form Request. La route est responsable d'appeler `toRecord()`.**
+
+```php
+// ✅ BON - La route appelle toRecord() et passe un Record à l'Action
+Route::get('/users/{userId}', function ($userId, ShowUserRequest $request, ShowUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
+
+// ❌ MAUVAIS - La route passe la Request directement à l'Action (INTERDIT)
+Route::get('/users/{userId}', function ($userId, ShowUserRequest $request, ShowUserAction $action) {
+    return $action->run($userId, $request);  // ❌
+});
+```
+
+### 4.1 Pourquoi cette règle ?
+
+| Raison | Explication |
+|--------|-------------|
+| **Testabilité** | Un Record se crée facilement, une Request se mocke difficilement |
+| **Pureté** | L'Action ne dépend plus de Laravel |
+| **Contrat explicite** | Le Record dit exactement ce dont l'Action a besoin |
+| **Responsabilité claire** | La route transforme la Request en Record, l'Action ne connaît pas la Request |
+
+---
+
+## 5. Règle : Pas de paramètre sans être utilisé
+
+> **⚠️ Un paramètre d'URL (`{userId}`) ou un paramètre de requête (query string) ne peut pas exister sans être passé à l'Action via le Record. Supprimez-le si vous ne l'utilisez pas.**
 
 ```php
 // ❌ MAUVAIS - Paramètre d'URL non utilisé
 // URL: GET /users/{userId}
-Route::get('/users/{userId}', fn(ListUsersAction $action) => $action->run());
+Route::get('/users/{userId}', function (ListUsersAction $action) {
+    return $action->run();
+});
 
 // ✅ BON - Paramètre d'URL utilisé
-Route::get('/users/{userId}', fn($userId, ShowUserRequest $request, ShowUserAction $action) => $action->run($userId, $request));
+Route::get('/users/{userId}', function ($userId, ShowUserRequest $request, ShowUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
 
 // ❌ MAUVAIS - Paramètre query non utilisé
 // URL: GET /users?page=1
-Route::get('/users', fn(ListUsersAction $action) => $action->run());
+Route::get('/users', function (ListUsersAction $action) {
+    return $action->run();
+});
 
 // ✅ BON - Paramètre query utilisé via Form Request
-Route::get('/users', fn(ListUsersRequest $request, ListUsersAction $action) => $action->run($request));
+Route::get('/users', function (ListUsersRequest $request, ListUsersAction $action) {
+    return $action->run($request->toRecord());
+});
 ```
 
 ---
 
-## 5. Ordre des paramètres dans la méthode `run()`
+## 6. Ordre des paramètres dans la route
 
-> **Les paramètres d'URL sont passés dans l'ordre de la route. La Form Request est toujours le dernier paramètre.**
+> **Les paramètres d'URL sont passés dans l'ordre de la route. La Form Request est toujours avant l'Action.**
 
 ```php
 // URL: PUT /users/{userId}/posts/{postId}
 Route::put('/users/{userId}/posts/{postId}', 
-    fn($userId, $postId, UpdatePostRequest $request, UpdatePostAction $action) => 
-    $action->run($userId, $postId, $request)
+    function ($userId, $postId, UpdatePostRequest $request, UpdatePostAction $action) {
+        return $action->run($request->toRecord((int) $userId, (int) $postId));
+    }
 );
 
-// La signature de la méthode run() reflète cet ordre
+// La signature de la méthode run() reçoit un Record
 final class UpdatePostAction extends AbstractAction
 {
-    public function run(int $userId, int $postId, UpdatePostRequest $request): JsonResponse
+    public function run(UpdatePostRecord $record): JsonResponse
     {
-        // ...
+        // $record->userId et $record->postId sont disponibles
     }
 }
 ```
 
 ---
 
-## 6. Logique dans les routes web (⚠️ RÈGLE STRICTE)
+## 7. La méthode `toRecord()` selon le type de route
+
+### 7.1 Route sans paramètre d'URL
+
+```php
+// Route
+Route::get('/users', function (ListUsersRequest $request, ListUsersAction $action) {
+    return $action->run($request->toRecord());
+});
+
+// Form Request
+final class ListUsersRequest extends AbstractRequest
+{
+    public function toRecord(): ListUsersRecord
+    {
+        return new ListUsersRecord(
+            search: $this->input('search'),
+            page: $this->integer('page', 1),
+            perPage: $this->integer('per_page', 15),
+        );
+    }
+}
+
+// Action
+final class ListUsersAction extends AbstractAction
+{
+    public function run(ListUsersRecord $record): JsonResponse { ... }
+}
+```
+
+### 7.2 Route avec un paramètre d'URL
+
+```php
+// Route
+Route::get('/users/{userId}', function ($userId, ShowUserRequest $request, ShowUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
+
+// Form Request
+final class ShowUserRequest extends AbstractRequest
+{
+    public function toRecord(int $userId): ShowUserRecord
+    {
+        return new ShowUserRecord(
+            id: $userId,
+            currentUserId: auth()->id(),
+            includeProfile: $this->boolean('include_profile'),
+        );
+    }
+}
+
+// Action
+final class ShowUserAction extends AbstractAction
+{
+    public function run(ShowUserRecord $record): JsonResponse { ... }
+}
+```
+
+### 7.3 Route avec plusieurs paramètres d'URL
+
+```php
+// Route
+Route::get('/users/{userId}/posts/{postId}', function ($userId, $postId, ShowPostRequest $request, ShowPostAction $action) {
+    return $action->run($request->toRecord((int) $userId, (int) $postId));
+});
+
+// Form Request
+final class ShowPostRequest extends AbstractRequest
+{
+    public function toRecord(int $userId, int $postId): ShowPostRecord
+    {
+        return new ShowPostRecord(
+            userId: $userId,
+            postId: $postId,
+            currentUserId: auth()->id(),
+            includeComments: $this->boolean('include_comments'),
+        );
+    }
+}
+
+// Action
+final class ShowPostAction extends AbstractAction
+{
+    public function run(ShowPostRecord $record): JsonResponse { ... }
+}
+```
+
+### 7.4 Route POST (sans paramètre d'URL)
+
+```php
+// Route
+Route::post('/users', function (CreateUserRequest $request, CreateUserAction $action) {
+    return $action->run($request->toRecord());
+});
+
+// Form Request
+final class CreateUserRequest extends AbstractRequest
+{
+    public function toRecord(): CreateUserRecord
+    {
+        return new CreateUserRecord(
+            name: $this->input('name'),
+            email: $this->input('email'),
+            password: $this->input('password'),
+            createdBy: auth()->id(),
+            ip: $this->ip(),
+        );
+    }
+}
+
+// Action
+final class CreateUserAction extends AbstractAction
+{
+    public function run(CreateUserRecord $record): JsonResponse { ... }
+}
+```
+
+---
+
+## 8. Logique dans les routes web (⚠️ RÈGLE STRICTE)
 
 > **⚠️ Une route web GET ne peut avoir que de la logique de validation ou de vérification via des Tasks qui retournent `bool` (et `abort()` si échec) ou lèvent une exception.**
 
-### 6.1 Exemple : Validation avec une seule Task qui retourne `bool`
-
 ```php
-// Task unique qui fait toutes les validations de même nature
-final class ValidateUserAccessTask extends AbstractTask
+// routes/web.php
+Route::get('/dashboard', function (ShowDashboardRequest $request, ShowDashboardAction $action) {
+    return $action->run($request->toRecord());
+});
+
+// Form Request
+final class ShowDashboardRequest extends AbstractRequest
 {
-    public function __construct(
-        private readonly UserRepository $userRepository,
-    ) {}
-    
-    public function execute(ValidateUserAccessRecord $record): bool
+    public function toRecord(): ShowDashboardRecord
     {
-        // Vérification 1 : l'utilisateur existe
-        if (!$this->userRepository->exists($record->userId)) {
-            return false;
-        }
-        
-        // Vérification 2 : l'utilisateur est actif
-        if (!$this->userRepository->isActive($record->userId)) {
-            return false;
-        }
-        
-        // Vérification 3 : l'utilisateur a la permission
-        if (!$this->userRepository->hasPermission($record->userId, $record->permission)) {
-            return false;
-        }
-        
-        return true;
+        return new ShowDashboardRecord(
+            userId: auth()->id(),
+            url: $this->fullUrl(),
+            ip: $this->ip(),
+        );
     }
 }
 
-// Task pour logger (effet de bord)
-final class LogUnauthorizedAccessTask extends AbstractTask
-{
-    public function execute(LogUnauthorizedAccessRecord $record): void
-    {
-        Log::warning('Unauthorized access attempt', [
-            'user_id' => $record->userId,
-            'attempted_url' => $record->url,
-            'ip' => $record->ip,
-            'required_permission' => $record->permission,
-        ]);
-    }
-}
-
-// Task pour envoyer un email d'alerte (effet de bord)
-final class SendSecurityAlertEmailTask extends AbstractTask
-{
-    public function execute(SendSecurityAlertEmailRecord $record): void
-    {
-        Mail::to(config('security.admin_email'))->send(new SecurityAlertEmail(
-            userId: $record->userId,
-            url: $record->url,
-            ip: $record->ip,
-            permission: $record->permission,
-        ));
-    }
-}
-
-// Worker qui orchestre les 3 Tasks
-final class HandleDashboardAccessWorker extends AbstractWorker
-{
-    public function __construct(
-        private readonly ValidateUserAccessTask $validateAccess,
-        private readonly LogUnauthorizedAccessTask $logAccess,
-        private readonly SendSecurityAlertEmailTask $sendAlert,
-    ) {}
-    
-    public function execute(HandleDashboardAccessRecord $record): void
-    {
-        $hasAccess = $this->validateAccess->execute(new ValidateUserAccessRecord(
-            userId: $record->userId,
-            permission: 'access_dashboard',
-        ));
-        
-        if (!$hasAccess) {
-            $this->logAccess->execute(new LogUnauthorizedAccessRecord(
-                userId: $record->userId,
-                url: $record->url,
-                ip: $record->ip,
-                permission: 'access_dashboard',
-            ));
-            
-            $this->sendAlert->execute(new SendSecurityAlertEmailRecord(
-                userId: $record->userId,
-                url: $record->url,
-                ip: $record->ip,
-                permission: 'access_dashboard',
-            ));
-            
-            abort(403, 'Unauthorized access to dashboard');
-        }
-    }
-}
-
-// Action Web avec Worker
+// Action Web
 final class ShowDashboardAction extends AbstractAction
 {
     public function __construct(
         private readonly HandleDashboardAccessWorker $handleAccess,
     ) {}
     
-    public function run(ShowDashboardRequest $request): InertiaResponse
+    public function run(ShowDashboardRecord $record): InertiaResponse
     {
-        $record = new HandleDashboardAccessRecord(
-            userId: $request->user()->id,
-            url: $request->fullUrl(),
-            ip: $request->ip(),
-        );
-        
+        // Le Worker contient la logique de validation
+        // Il appelle abort(403) si l'accès est refusé
         $this->handleAccess->execute($record);
         
         return $this->inertia('Dashboard/Index');
@@ -228,19 +331,23 @@ final class ShowDashboardAction extends AbstractAction
 
 ---
 
-## 7. Séparation Web vs API
+## 9. Séparation Web vs API
 
 > **Une Action web et une Action API sont deux classes différentes. La logique métier est dans l'API. La route web GET ne fait que valider et rendre la vue.**
 
 ```php
 // web.php
-Route::get('/dashboard', fn(Web\Dashboard\ShowDashboardRequest $request, Web\Dashboard\ShowDashboardAction $action) => $action->run($request));
+Route::get('/dashboard', function (Web\Dashboard\ShowDashboardRequest $request, Web\Dashboard\ShowDashboardAction $action) {
+    return $action->run($request->toRecord());
+});
 
 // api.php
-Route::get('/dashboard', fn(Api\Dashboard\ShowDashboardRequest $request, Api\Dashboard\ShowDashboardAction $action) => $action->run($request));
+Route::get('/dashboard', function (Api\Dashboard\ShowDashboardRequest $request, Api\Dashboard\ShowDashboardAction $action) {
+    return $action->run($request->toRecord());
+});
 ```
 
-### 7.1 Action Web (validation uniquement)
+### 9.1 Action Web (validation uniquement)
 
 ```php
 // App\Actions\Web\Dashboard\ShowDashboardAction
@@ -250,22 +357,15 @@ final class ShowDashboardAction extends AbstractAction
         private readonly HandleDashboardAccessWorker $handleAccess,
     ) {}
     
-    public function run(ShowDashboardRequest $request): InertiaResponse
+    public function run(ShowDashboardRecord $record): InertiaResponse
     {
-        $record = new HandleDashboardAccessRecord(
-            userId: $request->user()->id,
-            url: $request->fullUrl(),
-            ip: $request->ip(),
-        );
-        
         $this->handleAccess->execute($record);
-        
         return $this->inertia('Dashboard/Index');
     }
 }
 ```
 
-### 7.2 Action API (logique métier complète)
+### 9.2 Action API (logique métier complète)
 
 ```php
 // App\Actions\Api\Dashboard\ShowDashboardAction
@@ -275,13 +375,8 @@ final class ShowDashboardAction extends AbstractAction
         private readonly DashboardService $dashboardService,
     ) {}
     
-    public function run(ShowDashboardRequest $request): JsonResponse
+    public function run(ShowDashboardRecord $record): JsonResponse
     {
-        $record = new ShowDashboardRecord(
-            userId: $request->user()->id,
-            period: $request->input('period', 'daily'),
-        );
-        
         $dashboardRecord = $this->dashboardService->getDashboard($record);
         $dashboardData = DashboardData::fromRecord($dashboardRecord);
         
@@ -292,18 +387,18 @@ final class ShowDashboardAction extends AbstractAction
 
 ---
 
-## 8. Paramètres d'URL vs Query Parameters
+## 10. Paramètres d'URL vs Query Parameters
 
-| Type | Emplacement | Convention | Utilisation |
-|------|-------------|------------|-------------|
-| **Paramètre d'URL** | `{userId}` | `camelCase` | Identifiant de ressource (ex: `userId`, `postId`) |
-| **Paramètre de requête** | `?user_slug=&page=` | `snake_case` | Filtres, pagination, tri → dans la Form Request |
+| Type | Emplacement | Convention | Récupération |
+|------|-------------|------------|--------------|
+| **Paramètre d'URL** | `{userId}` | `camelCase` | Passé à `toRecord()` comme paramètre |
+| **Paramètre de requête** | `?user_slug=&page=` | `snake_case` | Via `$this->input()` dans `toRecord()` |
 
 ```php
 // URL: GET /users?user_slug=john&page=2&per_page=15
 
 // Form Request
-final class ListUsersRequest extends FormRequest
+final class ListUsersRequest extends AbstractRequest
 {
     public function rules(): array
     {
@@ -313,22 +408,26 @@ final class ListUsersRequest extends FormRequest
             'per_page' => 'nullable|integer|min:1|max:100',
         ];
     }
+    
+    public function toRecord(): ListUsersRecord
+    {
+        return new ListUsersRecord(
+            userSlug: $this->input('user_slug'),
+            page: $this->integer('page', 1),
+            perPage: $this->integer('per_page', 15),
+        );
+    }
 }
 
 // Route
-Route::get('/users', fn(ListUsersRequest $request, ListUsersAction $action) => $action->run($request));
-
-// Dans l'Action
-$record = new ListUsersRecord(
-    userSlug: $request->input('user_slug'),
-    page: $request->integer('page', 1),
-    perPage: $request->integer('per_page', 15),
-);
+Route::get('/users', function (ListUsersRequest $request, ListUsersAction $action) {
+    return $action->run($request->toRecord());
+});
 ```
 
 ---
 
-## 9. Récapitulatif des contraintes
+## 11. Récapitulatif des contraintes
 
 | Contrainte | Règle |
 |------------|-------|
@@ -336,24 +435,48 @@ $record = new ListUsersRecord(
 | **`api.php`** | `GET`, `POST`, `PUT`, `PATCH`, `DELETE` |
 | **Action par route** | Une route = une Action (pas de réutilisation) |
 | **Web vs API** | Actions séparées |
-| **Logique web** | Uniquement validations/vérifications via Tasks (retournent `bool`) → Worker orchestre |
-| **Logique API** | Logique métier complète (Services) → retourne Data |
+| **Logique web** | Uniquement validations/vérifications via Worker |
+| **Logique API** | Logique métier complète (Services) |
 | **Form Request** | ⚠️ TOUTE route DOIT avoir une Form Request |
-| **Paramètre URL** | ⚠️ Doit être utilisé, ordre respecté, `camelCase` |
-| **Paramètre requête** | ⚠️ Doit être utilisé, dans Form Request, `snake_case` |
+| **Appel à l'Action** | ⚠️ DOIT passer un Record via `$request->toRecord()` |
+| **Paramètre URL** | ⚠️ Doit être utilisé et passé à `toRecord()` |
+| **Paramètre requête** | ⚠️ Doit être utilisé, validé dans Form Request |
 | **Nommage Action** | `{Verbe}{Ressource}Action` (ex: `ListUsersAction`) |
 
 ---
 
-## 10. Règle d'or
+## 12. Règle d'or
 
-> **Une route web GET ne fait que valider et rendre une vue Inertia. La logique métier est dans l'API. Toute route a une Form Request. Tout paramètre doit être utilisé.**
+> **Une route web GET ne fait que valider et rendre une vue Inertia. La logique métier est dans l'API. Toute route a une Form Request. Toute route appelle `toRecord()` et passe un Record à l'Action. L'Action ne connaît jamais la Request.**
 
 ```php
-// web.php
-Route::get('/dashboard', fn(Web\Dashboard\ShowDashboardRequest $request, Web\Dashboard\ShowDashboardAction $action) => $action->run($request));
+// ✅ BON - web.php
+Route::get('/dashboard', function (Web\Dashboard\ShowDashboardRequest $request, Web\Dashboard\ShowDashboardAction $action) {
+    return $action->run($request->toRecord());
+});
 
-// api.php
-Route::get('/dashboard', fn(Api\Dashboard\ShowDashboardRequest $request, Api\Dashboard\ShowDashboardAction $action) => $action->run($request));
-Route::post('/users', fn(Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) => $action->run($request));
+// ✅ BON - api.php (GET)
+Route::get('/dashboard', function (Api\Dashboard\ShowDashboardRequest $request, Api\Dashboard\ShowDashboardAction $action) {
+    return $action->run($request->toRecord());
+});
+
+// ✅ BON - api.php (POST)
+Route::post('/users', function (Api\Users\CreateUserRequest $request, Api\Users\CreateUserAction $action) {
+    return $action->run($request->toRecord());
+});
+
+// ✅ BON - api.php (avec paramètre d'URL)
+Route::get('/users/{userId}', function ($userId, Api\Users\ShowUserRequest $request, Api\Users\ShowUserAction $action) {
+    return $action->run($request->toRecord((int) $userId));
+});
+
+// ✅ BON - api.php (avec plusieurs paramètres d'URL)
+Route::put('/users/{userId}/posts/{postId}', function ($userId, $postId, Api\Posts\UpdatePostRequest $request, Api\Posts\UpdatePostAction $action) {
+    return $action->run($request->toRecord((int) $userId, (int) $postId));
+});
+
+// ❌ MAUVAIS - Ne passe PAS la Request à l'Action
+Route::get('/users', function (ListUsersRequest $request, ListUsersAction $action) {
+    return $action->run($request);  // ❌ DOIT être $request->toRecord()
+});
 ```

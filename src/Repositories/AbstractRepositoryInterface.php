@@ -95,7 +95,7 @@ interface AbstractRepositoryInterface
     /**
      * Paginates results with the given parameters.
      *
-     * @param  PaginateRecord $record  Pagination parameters (page, perPage, sort, filters, columns)
+     * @param  PaginateRecord  $record  Pagination parameters (page, perPage, sort, filters, columns)
      * @return LengthAwarePaginator<TModel> Paginated results with metadata
      */
     public function paginate(PaginateRecord $record): LengthAwarePaginator;

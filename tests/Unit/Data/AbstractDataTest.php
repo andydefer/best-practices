@@ -434,20 +434,28 @@ final class AbstractDataTest extends TestCase
         return new class($id, $name, $status, $role, $grade)
         {
             public string $id;
+
             public string $name;
+
             public string $email;
+
             public TestUserStatus $status;
+
             public TestUserRole $role;
+
             public TestUserGrade $grade;
+
             public ?string $emailVerifiedAt = null;
+
             public string $createdAt;
+
             public array $tags = [];
 
             public function __construct(string $id, string $name, TestUserStatus $status, TestUserRole $role, TestUserGrade $grade)
             {
                 $this->id = $id;
                 $this->name = $name;
-                $this->email = $name . '@example.com';
+                $this->email = $name.'@example.com';
                 $this->status = $status;
                 $this->role = $role;
                 $this->grade = $grade;

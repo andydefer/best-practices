@@ -6,10 +6,6 @@ namespace AndyDefer\BestPractices\Traits\Records;
 
 use ArrayIterator;
 use InvalidArgumentException;
-use IteratorAggregate;
-use JsonSerializable;
-use OutOfBoundsException;
-use Stringable;
 use Traversable;
 
 /**
@@ -19,12 +15,8 @@ use Traversable;
  */
 trait ArrayableCollectionTrait
 {
-
     /**
      * Check if offset exists.
-     *
-     * @param mixed $offset
-     * @return bool
      */
     public function offsetExists(mixed $offset): bool
     {
@@ -34,7 +26,6 @@ trait ArrayableCollectionTrait
     /**
      * Get item at offset.
      *
-     * @param mixed $offset
      * @return TValue|null
      */
     public function offsetGet(mixed $offset): mixed
@@ -45,8 +36,8 @@ trait ArrayableCollectionTrait
     /**
      * Set item at offset (with type validation).
      *
-     * @param mixed $offset
-     * @param TValue $value
+     * @param  TValue  $value
+     *
      * @throws InvalidArgumentException
      */
     public function offsetSet(mixed $offset, mixed $value): void
@@ -62,8 +53,6 @@ trait ArrayableCollectionTrait
 
     /**
      * Unset item at offset.
-     *
-     * @param mixed $offset
      */
     public function offsetUnset(mixed $offset): void
     {
@@ -82,8 +71,6 @@ trait ArrayableCollectionTrait
 
     /**
      * Count items.
-     *
-     * @return int
      */
     public function count(): int
     {
@@ -92,12 +79,11 @@ trait ArrayableCollectionTrait
 
     /**
      * Convert to string.
-     *
-     * @return string
      */
     public function __toString(): string
     {
         $types = implode('|', $this->allowedTypes);
+
         return sprintf('TypedRecords(%s) with %d items', $types, count($this->items));
     }
 

@@ -6,10 +6,10 @@ namespace AndyDefer\BestPractices\Tests\Fixtures\Models;
 
 use AndyDefer\BestPractices\Casts\JsonCast;
 use AndyDefer\BestPractices\Casts\MoneyCast;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Collection;
-use Illuminate\Database\Eloquent\Casts\Attribute;
 
 final class TestProduct extends Model
 {

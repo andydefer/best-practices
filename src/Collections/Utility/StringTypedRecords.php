@@ -8,7 +8,7 @@ use AndyDefer\BestPractices\Collections\TypedRecords;
 
 /**
  * Collection typée pour les chaînes de caractères.
- * 
+ *
  * @extends TypedRecords<string>
  */
 final class StringTypedRecords extends TypedRecords
@@ -23,7 +23,7 @@ final class StringTypedRecords extends TypedRecords
      */
     public function toLowercase(): self
     {
-        return $this->map(fn($item) => strtolower($item));
+        return $this->map(fn ($item) => strtolower($item));
     }
 
     /**
@@ -31,7 +31,7 @@ final class StringTypedRecords extends TypedRecords
      */
     public function toUppercase(): self
     {
-        return $this->map(fn($item) => strtoupper($item));
+        return $this->map(fn ($item) => strtoupper($item));
     }
 
     /**
@@ -39,7 +39,7 @@ final class StringTypedRecords extends TypedRecords
      */
     public function containsSubstring(string $search): self
     {
-        return $this->filter(fn($item) => str_contains($item, $search));
+        return $this->filter(fn ($item) => str_contains($item, $search));
     }
 
     /**
@@ -47,7 +47,7 @@ final class StringTypedRecords extends TypedRecords
      */
     public function startsWith(string $prefix): self
     {
-        return $this->filter(fn($item) => str_starts_with($item, $prefix));
+        return $this->filter(fn ($item) => str_starts_with($item, $prefix));
     }
 
     /**
@@ -55,7 +55,7 @@ final class StringTypedRecords extends TypedRecords
      */
     public function endsWith(string $suffix): self
     {
-        return $this->filter(fn($item) => str_ends_with($item, $suffix));
+        return $this->filter(fn ($item) => str_ends_with($item, $suffix));
     }
 
     /**
@@ -63,7 +63,7 @@ final class StringTypedRecords extends TypedRecords
      */
     public function filterEmpty(): self
     {
-        return $this->filter(fn($item) => $item !== '' && $item !== null);
+        return $this->filter(fn ($item) => $item !== '' && $item !== null);
     }
 
     /**
@@ -71,7 +71,7 @@ final class StringTypedRecords extends TypedRecords
      */
     public function trim(): self
     {
-        return $this->map(fn($item) => trim($item));
+        return $this->map(fn ($item) => trim($item));
     }
 
     /**
@@ -79,8 +79,8 @@ final class StringTypedRecords extends TypedRecords
      */
     public function truncate(int $length, string $suffix = '...'): self
     {
-        return $this->map(fn($item) => strlen($item) > $length
-            ? substr($item, 0, $length) . $suffix
+        return $this->map(fn ($item) => strlen($item) > $length
+            ? substr($item, 0, $length).$suffix
             : $item);
     }
 }

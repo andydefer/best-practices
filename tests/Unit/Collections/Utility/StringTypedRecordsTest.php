@@ -11,7 +11,7 @@ final class StringTypedRecordsTest extends TestCase
 {
     public function test_constructor_creates_empty_collection(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
 
         $this->assertTrue($collection->isEmpty());
         $this->assertSame(['string'], $collection->getAllowedTypes());
@@ -19,7 +19,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_add_strings(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello')->add('world');
 
         $this->assertCount(2, $collection);
@@ -30,13 +30,13 @@ final class StringTypedRecordsTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add(123); // int not allowed
     }
 
-    public function test_toLowercase(): void
+    public function test_to_lowercase(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('HELLO')->add('WoRlD')->add('PHP');
 
         $result = $collection->toLowercase();
@@ -45,9 +45,9 @@ final class StringTypedRecordsTest extends TestCase
         $this->assertSame(['hello', 'world', 'php'], $result->toArray());
     }
 
-    public function test_toUppercase(): void
+    public function test_to_uppercase(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello')->add('world')->add('php');
 
         $result = $collection->toUppercase();
@@ -56,9 +56,9 @@ final class StringTypedRecordsTest extends TestCase
         $this->assertSame(['HELLO', 'WORLD', 'PHP'], $result->toArray());
     }
 
-    public function test_containsSubstring(): void
+    public function test_contains_substring(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello world')->add('good morning')->add('hello php');
 
         $result = $collection->containsSubstring('hello');
@@ -66,9 +66,9 @@ final class StringTypedRecordsTest extends TestCase
         $this->assertSame(['hello world', 'hello php'], $result->toArray());
     }
 
-    public function test_startsWith(): void
+    public function test_starts_with(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello world')->add('world hello')->add('hello php');
 
         $result = $collection->startsWith('hello');
@@ -76,9 +76,9 @@ final class StringTypedRecordsTest extends TestCase
         $this->assertSame(['hello world', 'hello php'], $result->toArray());
     }
 
-    public function test_endsWith(): void
+    public function test_ends_with(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello world')->add('world hello')->add('php world');
 
         $result = $collection->endsWith('world');
@@ -86,9 +86,9 @@ final class StringTypedRecordsTest extends TestCase
         $this->assertSame(['hello world', 'php world'], $result->toArray());
     }
 
-    public function test_filterEmpty(): void
+    public function test_filter_empty(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello')->add('')->add('world')->add('')->add('php');
 
         $result = $collection->filterEmpty();
@@ -98,7 +98,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_trim(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('  hello  ')->add('world')->add('  php  ');
 
         $result = $collection->trim();
@@ -108,7 +108,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_truncate(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello world')->add('short')->add('very long string here');
 
         $result = $collection->truncate(5, '...');
@@ -118,7 +118,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_truncate_without_suffix(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello world')->add('short');
 
         $result = $collection->truncate(5);
@@ -128,7 +128,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_chained_operations(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('  HELLO WORLD  ')->add('  GOOD MORNING  ')->add('short');
 
         $result = $collection
@@ -141,7 +141,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_original_collection_is_not_modified(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('Hello')->add('World');
 
         $collection->toLowercase();
@@ -151,7 +151,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_empty_collection_operations_return_empty(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
 
         $this->assertTrue($collection->toLowercase()->isEmpty());
         $this->assertTrue($collection->toUppercase()->isEmpty());
@@ -165,7 +165,7 @@ final class StringTypedRecordsTest extends TestCase
 
     public function test_json_serialize(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello')->add('world');
 
         $json = json_encode($collection);
@@ -173,9 +173,9 @@ final class StringTypedRecordsTest extends TestCase
         $this->assertSame('["hello","world"]', $json);
     }
 
-    public function test_toArray_returns_items(): void
+    public function test_to_array_returns_items(): void
     {
-        $collection = new StringTypedRecords();
+        $collection = new StringTypedRecords;
         $collection->add('hello')->add('world');
 
         $this->assertSame(['hello', 'world'], $collection->toArray());

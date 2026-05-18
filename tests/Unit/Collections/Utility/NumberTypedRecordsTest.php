@@ -11,7 +11,7 @@ final class NumberTypedRecordsTest extends TestCase
 {
     public function test_constructor_creates_empty_collection(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
 
         $this->assertTrue($collection->isEmpty());
         $this->assertSame(['int', 'float'], $collection->getAllowedTypes());
@@ -19,7 +19,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_add_mixed_numbers(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(1)->add(2.5)->add(3)->add(4.7);
 
         $this->assertCount(4, $collection);
@@ -30,13 +30,13 @@ final class NumberTypedRecordsTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
 
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add('hello');
     }
 
     public function test_zero_filters_zero_values(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(0)->add(2.5)->add(0.0)->add(3)->add(-5);
 
         $result = $collection->zero();
@@ -45,9 +45,9 @@ final class NumberTypedRecordsTest extends TestCase
         $this->assertSame([0, 0.0], $result->toArray());
     }
 
-    public function test_nonNegative_filters_non_negative_values(): void
+    public function test_non_negative_filters_non_negative_values(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(-5)->add(0)->add(2.5)->add(3)->add(-2.5);
 
         $result = $collection->nonNegative();
@@ -57,7 +57,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_positive_filters_positive_numbers(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(-5)->add(0)->add(2.5)->add(3)->add(-2.5);
 
         $result = $collection->positive();
@@ -67,7 +67,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_negative_filters_negative_numbers(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(-5)->add(0)->add(2.5)->add(3)->add(-2.5);
 
         $result = $collection->negative();
@@ -77,7 +77,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_between_filters_numbers_in_range(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(1)->add(2.5)->add(5)->add(7.5)->add(10);
 
         $result = $collection->between(2, 8);
@@ -87,7 +87,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_average_calculates_mean(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(10)->add(20.5)->add(30);
 
         $this->assertEquals(20.166666666666668, $collection->average());
@@ -116,7 +116,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_chained_operations(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(-5)->add(0)->add(2.5)->add(3)->add(8.7)->add(10);
 
         $result = $collection
@@ -129,7 +129,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_empty_collection_operations_return_empty(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
 
         $this->assertTrue($collection->positive()->isEmpty());
         $this->assertTrue($collection->negative()->isEmpty());
@@ -141,7 +141,7 @@ final class NumberTypedRecordsTest extends TestCase
 
     public function test_json_serialize(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(1)->add(2.5)->add(3);
 
         $json = json_encode($collection);
@@ -149,9 +149,9 @@ final class NumberTypedRecordsTest extends TestCase
         $this->assertSame('[1,2.5,3]', $json);
     }
 
-    public function test_toArray_returns_items(): void
+    public function test_to_array_returns_items(): void
     {
-        $collection = new NumberTypedRecords();
+        $collection = new NumberTypedRecords;
         $collection->add(1)->add(2.5)->add(3);
 
         $this->assertSame([1, 2.5, 3], $collection->toArray());

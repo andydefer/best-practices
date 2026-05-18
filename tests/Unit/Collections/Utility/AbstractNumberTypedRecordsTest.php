@@ -11,7 +11,7 @@ final class AbstractNumberTypedRecordsTest extends TestCase
 {
     private function createCollection(): IntTypedRecords
     {
-        return new IntTypedRecords();
+        return new IntTypedRecords;
     }
 
     public function test_positive_filters_positive_numbers(): void
