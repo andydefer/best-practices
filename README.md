@@ -23,35 +23,46 @@ Ce package contient la documentation exhaustive des conventions, bonnes pratique
 
 | Document | Description |
 |----------|-------------|
-| [practices/records.md](./practices/records.md) | Structures typées pour la communication interne (Services, Repositories, Workers) |
-| [practices/datas.md](./practices/datas.md) | DTOs purs et immutables pour les réponses API (création via `fromRecord()`) |
-| [practices/actions.md](./practices/actions.md) | Composants dédiés à UNE SEULE route (web ou API) avec un type de retour unique |
-| [practices/services.md](./practices/services.md) | Logique métier pure (calculs, validation) ou services techniques (cache, email) |
-| [practices/workers.md](./practices/workers.md) | Orchestration d'opérations complexes avec transaction et multiples effets de bord |
-| [practices/tasks.md](./practices/tasks.md) | Actions de même nature (ex: multiples créations DB, logs, appels API) |
+| [practices/records.md](./practices/records.md) | Structures typées pour la communication interne (Services, Repositories, Workers). **⚠️ Les tableaux bruts sont STRICTEMENT INTERDITS : utilisez `TypedRecords`** |
+| [practices/typed-records.md](./practices/typed-records.md) | Collection type-safe qui remplace les tableaux bruts. Méthodes `map()`, `filter()`, `sum()`, `groupBy()`, assertions et collections utilitaires (`StringTypedRecords`, `IntTypedRecords`, `FloatTypedRecords`, `BoolTypedRecords`, `NumberTypedRecords`) |
+| [practices/datas.md](./practices/datas.md) | DTOs purs et immutables pour les réponses API. **⚠️ Création UNIQUEMENT via `fromRecord()`** |
+| [practices/actions.md](./practices/actions.md) | Composants dédiés à UNE SEULE route. **⚠️ Une Action ne reçoit JAMAIS une Request, elle reçoit un Record** |
+| [practices/services.md](./practices/services.md) | Logique métier pure (calculs, validation) ou services techniques (cache, email). **⚠️ ZÉRO appel statique, TOUTES les dépendances injectées** |
+| [practices/workers.md](./practices/workers.md) | Orchestration d'opérations complexes. **⚠️ ZÉRO transaction, ZÉRO retour de valeur** |
+| [practices/tasks.md](./practices/tasks.md) | Actions de même nature (ex: multiples créations DB, logs, appels API). **⚠️ ZÉRO appel statique, TOUTES les dépendances injectées** |
 
 ### Accès aux données
 
 | Document | Description |
 |----------|-------------|
-| [practices/repositories.md](./practices/repositories.md) | Interface unique d'accès aux données (point d'entrée unique pour les Models) |
+| [practices/repositories.md](./practices/repositories.md) | Interface unique d'accès aux données. **⚠️ Tests UNIQUEMENT en intégration (pas de tests unitaires). Les méthodes héritées d'`AbstractRepository` sont DÉJÀ testées par le package** |
 | [practices/models.md](./practices/models.md) | Modèles anémiques (déclarations uniquement, aucune logique métier) |
-| [practices/enums.md](./practices/enums.md) | Enums typés avec méthodes de formatage et utilitaires (`getLabel`, `isActive`) |
+| [practices/casts.md](./practices/casts.md) | Casts personnalisés pour les attributs des modèles |
+| [practices/migrations.md](./practices/migrations.md) | Structure des migrations et conventions de nommage |
+| [practices/seeders.md](./practices/seeders.md) | Données réalistes sans factories Laravel |
 
 ### Couche HTTP
 
 | Document | Description |
 |----------|-------------|
-| [practices/form-requests.md](./practices/form-requests.md) | Validation dédiée à UNE SEULE route (avec règles strictes) |
+| [practices/form-requests.md](./practices/form-requests.md) | Validation dédiée à UNE SEULE route. **⚠️ DOIT étendre `AbstractRequest` et implémenter `toRecord()`** |
 | [practices/middlewares.md](./practices/middlewares.md) | Tâches transversales techniques (auth, logs, CORS) sans logique métier |
-| [practices/routes.md](./practices/routes.md) | Séparation stricte web/API et association route → Action → Form Request |
+| [practices/routes.md](./practices/routes.md) | Séparation stricte web/API. **⚠️ Les routes DOIVENT appeler `toRecord()` et passer un Record à l'Action** |
 
-### Tests et données
+### Tests et qualité
 
 | Document | Description |
 |----------|-------------|
-| [practices/seeders.md](./practices/seeders.md) | Données réalistes sans factories, nettoyage obligatoire |
-| [practices/tests.md](./practices/tests.md) | Tests unitaires (sans DB) vs fonctionnels (avec DB), conventions de nommage |
+| [practices/tests.md](./practices/tests.md) | Tests unitaires (sans DB) vs fonctionnels (avec DB). **⚠️ Actions = tests d'intégration uniquement, Repositories = tests d'intégration uniquement** |
+| [practices/interfaces.md](./practices/interfaces.md) | Contrats explicites pour le découplage |
+| [practices/abstracts.md](./practices/abstracts.md) | Classes de base pour l'infrastructure |
+| [practices/traits.md](./practices/traits.md) | Réutilisation horizontale avec convention `Has{Entity}` + `{Entity}able` |
+
+### Enums
+
+| Document | Description |
+|----------|-------------|
+| [practices/enums.md](./practices/enums.md) | Enums typés avec méthodes utilitaires (`values()`, `names()`, `isValid()`, `fromValue()`) |
 
 ---
 
@@ -64,9 +75,14 @@ Ce package contient la documentation exhaustive des conventions, bonnes pratique
 | **Type de retour unique** | Une Action ne peut pas retourner `JsonResponse|RedirectResponse` (sauf exception) |
 | **Service ≠ Worker** | Service = logique métier pure, Worker = orchestration d'effets de bord |
 | **Task = même nature** | Une Task peut faire plusieurs actions, mais TOUTES de même nature |
+| **ZÉRO appel statique** | `Log::`, `Mail::`, `Http::`, `Cache::`, `DB::` sont INTERDITS. TOUTES les dépendances DOIVENT être injectées |
+| **ZÉRO transaction dans Worker** | Les transactions sont gérées par les Repositories ou les Services |
 | **Repository unique** | Le seul point d'accès aux données. Pas de `User::find()` dans les Services |
 | **Model anémique** | Pas de logique métier dans les Models (déplacer dans Enum, Service ou Task) |
-| **Form Request par route** | Une Form Request = une route, règles strictes sur `authorize()` |
+| **Form Request → toRecord()** | Une Form Request DOIT implémenter `toRecord()` et l'Action reçoit le Record |
+| **TypedRecords** | Les tableaux bruts (`array`) sont STRICTEMENT INTERDITS dans les Records. Utilisez `TypedRecords` |
+| **Tests** | Actions et Repositories = tests d'intégration UNIQUEMENT. Services, Tasks, Workers = tests unitaires |
+| **Transactions** | Repositories = transaction pour atomicité DB, Services = transaction pour atomicité métier, Workers = ZÉRO transaction |
 
 ---
 
@@ -79,21 +95,23 @@ app/
 │   └── Web/
 ├── Data/              # DTOs pour réponses API (fromRecord)
 ├── Records/           # Communication interne (Services, Repositories)
+├── TypedRecords/      # Collections type-safe (StringTypedRecords, IntTypedRecords, etc.)
 ├── Services/          # Logique métier pure
-├── Workers/           # Orchestration d'opérations complexes
+├── Workers/           # Orchestration d'opérations complexes (ZÉRO transaction)
 ├── Tasks/             # Actions unitaires de même nature
 ├── Repositories/      # Accès aux données (étendent AbstractRepository)
 ├── Models/            # Modèles anémiques (déclarations uniquement)
 ├── Enums/             # Enums typés avec trait Enumable
+├── Contracts/         # Interfaces (avec suffixe "able")
+├── Traits/            # Traits (avec préfixe "Has")
 ├── Http/
-│   ├── Requests/      # Form Requests (une par route)
+│   ├── Requests/      # Form Requests (étendent AbstractRequest)
 │   └── Middlewares/   # Middlewares (auth, logs, CORS)
 └── ...
 ```
 
 ---
 
-**Version:** 1.0.1  
+**Version:** 2.0.0  
 **Mainteneur:** Andydefer  
-**Dernière mise à jour:** 2026-05-17
-```
+**Dernière mise à jour:** 2026-05-18
