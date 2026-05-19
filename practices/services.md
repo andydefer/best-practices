@@ -232,16 +232,21 @@ final class NotificationService
 }
 
 // ✅ BON - Si pas de logique métier, supprimer le Service
-final class NotificationController extends Controller
+final class SendNotificationAction extends AbstractAction
 {
-    public function send(Request $request): JsonResponse
+    public function __construct(
+        private readonly SendNotificationWorker $sendNotificationWorker,
+    ) {}
+
+    public function run(NotificationRecord $record): JsonResponse
     {
-        $record = new NotificationRecord(...);
-        
-        // Appel direct au Worker (ou à la Task)
         $this->sendNotificationWorker->execute($record);
-        
-        return response()->json(['success' => true]);
+
+        return $this->json(
+            new SuccessData(
+                success: true,
+            ),
+        );
     }
 }
 ```
