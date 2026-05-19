@@ -859,3 +859,458 @@ final class PerfectService
     }
 }
 ```
+
+# Appendice — Clarifications, bonnes pratiques et distinctions architecturales
+
+---
+
+# A.1 Clarification importante sur les effets de bord
+
+Lorsque ce document dit :
+
+> “Un Service ne doit jamais avoir d’effet de bord directement.”
+
+cela signifie :
+
+```text
+Un Service ne doit pas exécuter directement
+des effets de bord techniques externes.
+```
+
+Exemples d’effets de bord techniques externes :
+
+- envoi d’email,
+- écriture dans le cache,
+- appel HTTP/API,
+- filesystem,
+- websocket,
+- queue,
+- notifications push,
+- logging technique,
+- upload de fichier,
+- etc.
+
+Ces opérations doivent être déléguées à des Tasks ou à des Workers.
+
+---
+
+# A.2 Ce qui reste autorisé dans un Service
+
+Un Service peut parfaitement :
+
+- utiliser un Repository,
+- lire ou écrire en base via un Repository,
+- ouvrir une transaction,
+- effectuer des calculs,
+- effectuer des validations,
+- transformer des données,
+- prendre des décisions métier,
+- appeler d’autres Services,
+- appeler des Workers,
+- appeler des Tasks.
+
+---
+
+# A.3 Règle fondamentale de responsabilité
+
+Chaque couche doit justifier son existence.
+
+Si une couche :
+
+- ne contient aucune logique,
+- ne fait qu’un simple transfert,
+- ou ne fait qu’enchaîner passivement des appels,
+
+alors cette couche est probablement inutile.
+
+---
+
+# B.1 Différence réelle entre Service, Worker et Task
+
+| Couche | Responsabilité |
+|---|---|
+| Service | Logique métier réutilisable et retour d’un résultat |
+| Worker | Orchestration d’un scénario métier |
+| Task | Exécution d’une opération spécialisée |
+
+---
+
+# B.2 Service
+
+Un Service est utilisé lorsque :
+
+- une logique métier doit retourner un résultat,
+- plusieurs opérations du même domaine doivent être regroupées,
+- plusieurs actions de même nature doivent être centralisées,
+- une logique métier réutilisable doit être exposée.
+
+Un Service peut avoir plusieurs méthodes si elles appartiennent au même domaine métier.
+
+Le résultat d’un Service est généralement :
+
+- un bool,
+- un scalaire,
+- un Record,
+- un Enum,
+- un TypedRecords,
+- ou une transformation métier.
+
+---
+
+## ✅ Bon exemple : logique métier retournant un résultat
+
+```php
+final class EmailValidationService
+{
+    public function isValid(string $email): bool
+    {
+        return filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+    }
+
+    public function canReceiveNotifications(UserRecord $user): bool
+    {
+        return $user->emailVerified && !$user->notificationsDisabled;
+    }
+}
+```
+
+Pourquoi c’est un Service :
+
+- logique métier réutilisable,
+- retourne un résultat,
+- plusieurs méthodes du même domaine,
+- aucune orchestration complexe.
+
+---
+
+## ✅ Bon exemple : regroupement d’actions de même nature
+
+```php
+final class CacheService
+{
+    public function get(string $key): mixed
+    {
+        // ...
+    }
+
+    public function set(string $key, mixed $value): void
+    {
+        // ...
+    }
+
+    public function delete(string $key): void
+    {
+        // ...
+    }
+
+    public function batchSet(array $values): void
+    {
+        // ...
+    }
+}
+```
+
+Pourquoi c’est un Service :
+
+- toutes les actions concernent le cache,
+- même domaine technique,
+- évite la multiplication inutile des Tasks,
+- cohésion forte.
+
+---
+
+# B.3 Worker
+
+Un Worker orchestre plusieurs actions de nature différente dans un même processus métier.
+
+⚠️ IMPORTANT :
+
+```text
+Un Worker n’effectue pas les actions lui-même.
+Il orchestre des Tasks et coordonne le flux métier.
+```
+
+Un Worker :
+
+- coordonne plusieurs Tasks,
+- orchestre plusieurs types d’actions,
+- représente un scénario métier complet,
+- contrôle le flux métier,
+- ne contient pas la logique technique des opérations,
+- ne retourne généralement pas de résultat métier.
+
+Un Worker expose une seule méthode publique.
+
+---
+
+## ✅ Bon exemple
+
+```php
+final class CompleteSaleWorker
+{
+    public function execute(SaleRecord $sale): void
+    {
+        // Effectuer la vente
+        $invoiceNumber = $this->processSaleTask->execute($sale);
+
+        // Envoyer la facture
+        $mailSent = $this->sendInvoiceEmailTask->execute(
+            $sale,
+            $invoiceNumber,
+        );
+
+        // Logger selon le résultat
+        if ($mailSent) {
+            $this->logSuccessTask->execute($sale->id);
+            return;
+        }
+
+        // Notifier l’admin en cas d’échec
+        $this->notifyAdminTask->execute($sale->id);
+    }
+}
+```
+
+Pourquoi c’est un Worker :
+
+- plusieurs actions de nature différente,
+- orchestration d’un scénario métier,
+- coordination des Tasks,
+- gestion du flux métier,
+- le Worker n’effectue pas les opérations lui-même.
+
+---
+
+# B.4 Task
+
+Une Task représente :
+
+- une opération spécialisée,
+- une exécution technique,
+- une action précise,
+- ou plusieurs opérations de même nature.
+
+Une Task :
+
+- exécute,
+- ne décide pas du flux métier global,
+- ne contient pas d’orchestration,
+- ne contient pas de logique métier complexe.
+
+---
+
+## ✅ Bon exemple : opérations de même nature
+
+```php
+final class CreateUserResourcesTask
+{
+    public function execute(UserRecord $user): void
+    {
+        UserModel::create([...]);
+        UserLogModel::create([...]);
+        UserSettingsModel::create([...]);
+    }
+}
+```
+
+Pourquoi c’est une seule Task :
+
+- toutes les opérations sont de même nature,
+- création de ressources,
+- responsabilité cohérente,
+- aucune orchestration métier complexe.
+
+---
+
+## ❌ Mauvais exemple
+
+```php
+final class BadTask
+{
+    public function execute(UserRecord $user): void
+    {
+        $this->validateEmail($user);
+        $this->sendEmail($user);
+        $this->clearCache($user);
+    }
+}
+```
+
+Pourquoi c’est mauvais :
+
+- plusieurs actions de nature différente,
+- mélange validation + email + cache,
+- devient une orchestration cachée,
+- devrait être un Worker.
+
+---
+
+# B.5 Règle pratique simplifiée
+
+| Situation | Utiliser |
+|---|---|
+| Retourner un résultat métier | Service |
+| Regrouper des actions du même domaine | Service |
+| Orchestrer plusieurs actions différentes | Worker |
+| Exécuter une opération spécialisée | Task |
+| Plusieurs opérations de même nature | Une seule Task |
+| Plusieurs opérations de nature différente | Plusieurs Tasks + Worker |
+
+---
+
+# B.6 Règle de cohésion
+
+La question n’est pas :
+
+> “Combien d’actions y a-t-il ?”
+
+La vraie question est :
+
+```text
+Ces actions sont-elles de même nature
+ou de nature différente ?
+```
+
+- même nature → même Task ou même Service,
+- nature différente → séparation + Worker d’orchestration.
+
+---
+
+# C.1 Anti-pattern : Service wrapper inutile
+
+## ❌ Mauvais
+
+```php
+final class UserService
+{
+    public function __construct(
+        private readonly UserRepository $users,
+    ) {}
+
+    public function exists(int $id): bool
+    {
+        return $this->users->exists($id);
+    }
+}
+```
+
+Pourquoi c’est mauvais :
+
+- aucune logique métier,
+- simple proxy vers le Repository,
+- couche inutile,
+- abstraction artificielle.
+
+---
+
+## ✅ Bon
+
+Appeler directement le Repository.
+
+```php
+$userExists = $this->users->exists($id);
+```
+
+---
+
+# C.2 Anti-pattern : Worker avec logique métier complexe
+
+## ❌ Mauvais
+
+```php
+final class RegisterUserWorker
+{
+    public function execute(RegisterUserRecord $record): void
+    {
+        if ($record->age < 18 && !$record->parentalConsent) {
+            throw new Exception();
+        }
+
+        if ($record->country === 'FR' && $record->taxable) {
+            // logique métier complexe
+        }
+    }
+}
+```
+
+Pourquoi c’est mauvais :
+
+- le Worker devient un script procédural,
+- la logique métier n’est pas réutilisable,
+- les règles métier sont dispersées.
+
+---
+
+## ✅ Bon
+
+Déplacer les règles métier dans un Service dédié.
+
+---
+
+# C.3 Anti-pattern : Task avec logique métier
+
+## ❌ Mauvais
+
+```php
+final class SendDiscountEmailTask
+{
+    public function execute(UserRecord $user): void
+    {
+        if ($user->ordersCount > 10) {
+            // logique métier
+        }
+    }
+}
+```
+
+Pourquoi c’est mauvais :
+
+- une Task ne doit pas décider du métier,
+- une Task exécute uniquement.
+
+---
+
+## ✅ Bon
+
+Le Service décide.  
+La Task exécute.
+
+---
+
+# D.1 Règle de testabilité absolue
+
+Tout composant métier doit être testable unitairement.
+
+Cela implique :
+
+- zéro appel statique,
+- zéro Facade Laravel,
+- zéro accès direct aux Models dans les Services,
+- toutes les dépendances injectées,
+- logique métier isolable,
+- effets de bord mockables.
+
+---
+
+# D.2 Règle de domaine métier unique
+
+Un composant appartient toujours à un seul domaine métier.
+
+## ✅ Bon
+
+```text
+PaymentService
+DoctorAvailabilityService
+InvoiceCalculatorService
+```
+
+## ❌ Mauvais
+
+```text
+UserPaymentInvoiceNotificationService
+```
+
+Si le nom mélange plusieurs concepts :
+
+- le composant fait probablement trop de choses,
+- il doit être découpé.
