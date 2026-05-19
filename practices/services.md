@@ -804,58 +804,89 @@ final class PerfectService
     public function __construct(
         private readonly SomeRepository $repository,
         private readonly SomeCalculatorService $calculator,
-        private readonly SomeTask $task,
-        private readonly SomeWorker $worker,
-        private readonly LoggerInterface $logger,
+        private readonly PersistResultTask $persistResultTask,
+        private readonly LogExecutionTask $logExecutionTask,
+        private readonly ComplexProcessWorker $worker,
     ) {}
-    
-    // Méthode 1 : logique simple (2 Tasks)
+
+    /**
+     * Logique métier simple
+     * + orchestration légère (2 Tasks max)
+     */
     public function execute(InputRecord $record): OutputRecord
     {
         $this->validate($record);
+
         $result = $this->calculator->calculate($record);
+
         $output = $this->transform($result);
-        
+
         // 2 Tasks → acceptable dans un Service
-        $this->task->execute($output);
-        $this->logger->info('Executed', ['id' => $record->id]);
-        
+        $this->persistResultTask->execute($output);
+        $this->logExecutionTask->execute($record->id);
+
         return $output;
     }
-    
-    // Méthode 2 : logique complexe (3+ Tasks) → délégation au Worker
-    public function executeComplex(ComplexInputRecord $record): OutputRecord
-    {
+
+    /**
+     * Logique métier complexe
+     * + orchestration importante → Worker
+     */
+    public function executeComplex(
+        ComplexInputRecord $record,
+    ): OutputRecord {
         $result = $this->calculator->calculate($record);
+
         $output = $this->transform($result);
-        
-        // 3+ Tasks → Worker obligatoire
+
+        // 3+ Tasks → orchestration déléguée
         $this->worker->execute($output);
-        
+
         return $output;
     }
-    
-    // Méthode 3 (même domaine)
-    public function executeBatch(array $records): array
-    {
-        $results = [];
-        foreach ($records as $record) {
-            $results[] = $this->execute($record);
-        }
+
+    /**
+     * Traitement batch type-safe
+     */
+    public function executeBatch(
+        TypedRecords $records,
+    ): TypedRecords {
+        $records->assertAllOfType(InputRecord::class);
+
+        $results = new TypedRecords(OutputRecord::class);
+
+        $records->each(function (InputRecord $record) use ($results): void {
+            $results->add(
+                $this->execute($record),
+            );
+        });
+
         return $results;
     }
-    
-    // Méthode 4 (même domaine)
+
+    /**
+     * Validation métier
+     */
     public function validate(InputRecord $record): void
     {
         if (empty($record->requiredField)) {
-            throw new ValidationException('Required field missing');
+            throw new ValidationException(
+                'Required field missing',
+            );
         }
     }
-    
-    private function transform($result): OutputRecord
-    {
-        return new OutputRecord(...);
+
+    /**
+     * Transformation métier
+     */
+    private function transform(
+        CalculationResultRecord $result,
+    ): OutputRecord {
+        return new OutputRecord(
+            id: $result->id,
+            total: $result->total,
+            status: 'processed',
+        );
     }
 }
 ```
