@@ -356,11 +356,11 @@ $nested->add($tags, $ids);
 | Méthode | Description | Exemple |
 |---------|-------------|---------|
 | `add(...$items)` | Ajoute un ou plusieurs éléments | `$tags->add('developer', 'laravel')` |
-| `all(): array` | Retourne tous les éléments | `$tags->all()` |
+| `all(): TypedRecords` | Retourne tous les éléments | `$tags->all()` |
 | `count(): int` | Nombre d'éléments | `$tags->count()` |
 | `isEmpty(): bool` | Vérifie si vide | `$tags->isEmpty()` |
 | `isNotEmpty(): bool` | Vérifie si non vide | `$tags->isNotEmpty()` |
-| `firstItem(): mixed` | Premier élément | `$tags->firstItem()` |
+| `firstItem(): types safe | Premier élément | `$tags->firstItem()` |
 | `first(int $limit): TypedRecords` | Nouvelle collection avec n premiers éléments | `$tags->first(3)` |
 | `lastItem(): mixed` | Dernier élément | `$tags->lastItem()` |
 | `last(int $limit): TypedRecords` | Nouvelle collection avec n derniers éléments | `$tags->last(3)` |
