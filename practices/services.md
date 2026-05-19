@@ -860,11 +860,11 @@ final class PerfectService
 }
 ```
 
-# Appendice — Clarifications, bonnes pratiques et distinctions architecturales
+## Appendice — Clarifications, bonnes pratiques et distinctions architecturales
 
 ---
 
-# A.1 Clarification importante sur les effets de bord
+### A.1 Clarification importante sur les effets de bord
 
 Lorsque ce document dit :
 
@@ -894,7 +894,7 @@ Ces opérations doivent être déléguées à des Tasks ou à des Workers.
 
 ---
 
-# A.2 Ce qui reste autorisé dans un Service
+### A.2 Ce qui reste autorisé dans un Service
 
 Un Service peut parfaitement :
 
@@ -911,7 +911,7 @@ Un Service peut parfaitement :
 
 ---
 
-# A.3 Règle fondamentale de responsabilité
+### A.3 Règle fondamentale de responsabilité
 
 Chaque couche doit justifier son existence.
 
@@ -925,7 +925,7 @@ alors cette couche est probablement inutile.
 
 ---
 
-# B.1 Différence réelle entre Service, Worker et Task
+### B.1 Différence réelle entre Service, Worker et Task
 
 | Couche | Responsabilité |
 |---|---|
@@ -935,7 +935,7 @@ alors cette couche est probablement inutile.
 
 ---
 
-# B.2 Service
+### B.2 Service
 
 Un Service est utilisé lorsque :
 
@@ -957,7 +957,7 @@ Le résultat d’un Service est généralement :
 
 ---
 
-## ✅ Bon exemple : logique métier retournant un résultat
+#### ✅ Bon exemple : logique métier retournant un résultat
 
 ```php
 final class EmailValidationService
@@ -983,7 +983,7 @@ Pourquoi c’est un Service :
 
 ---
 
-## ✅ Bon exemple : regroupement d’actions de même nature
+#### ✅ Bon exemple : regroupement d’actions de même nature
 
 ```php
 final class CacheService
@@ -1019,7 +1019,7 @@ Pourquoi c’est un Service :
 
 ---
 
-# B.3 Worker
+### B.3 Worker
 
 Un Worker orchestre plusieurs actions de nature différente dans un même processus métier.
 
@@ -1043,7 +1043,7 @@ Un Worker expose une seule méthode publique.
 
 ---
 
-## ✅ Bon exemple
+#### ✅ Bon exemple
 
 ```php
 final class CompleteSaleWorker
@@ -1081,7 +1081,7 @@ Pourquoi c’est un Worker :
 
 ---
 
-# B.4 Task
+### B.4 Task
 
 Une Task représente :
 
@@ -1099,7 +1099,7 @@ Une Task :
 
 ---
 
-## ✅ Bon exemple : opérations de même nature
+#### ✅ Bon exemple : opérations de même nature
 
 ```php
 final class CreateUserResourcesTask
@@ -1122,7 +1122,7 @@ Pourquoi c’est une seule Task :
 
 ---
 
-## ❌ Mauvais exemple
+#### ❌ Mauvais exemple
 
 ```php
 final class BadTask
@@ -1145,7 +1145,7 @@ Pourquoi c’est mauvais :
 
 ---
 
-# B.5 Règle pratique simplifiée
+### B.5 Règle pratique simplifiée
 
 | Situation | Utiliser |
 |---|---|
@@ -1158,7 +1158,7 @@ Pourquoi c’est mauvais :
 
 ---
 
-# B.6 Règle de cohésion
+### B.6 Règle de cohésion
 
 La question n’est pas :
 
@@ -1176,7 +1176,7 @@ ou de nature différente ?
 
 ---
 
-# C.1 Anti-pattern : Service wrapper inutile
+### C.1 Anti-pattern : Service wrapper inutile
 
 ## ❌ Mauvais
 
@@ -1203,7 +1203,7 @@ Pourquoi c’est mauvais :
 
 ---
 
-## ✅ Bon
+#### ✅ Bon
 
 Appeler directement le Repository.
 
@@ -1213,9 +1213,9 @@ $userExists = $this->users->exists($id);
 
 ---
 
-# C.2 Anti-pattern : Worker avec logique métier complexe
+### C.2 Anti-pattern : Worker avec logique métier complexe
 
-## ❌ Mauvais
+#### ❌ Mauvais
 
 ```php
 final class RegisterUserWorker
@@ -1241,15 +1241,15 @@ Pourquoi c’est mauvais :
 
 ---
 
-## ✅ Bon
+#### ✅ Bon
 
 Déplacer les règles métier dans un Service dédié.
 
 ---
 
-# C.3 Anti-pattern : Task avec logique métier
+### C.3 Anti-pattern : Task avec logique métier
 
-## ❌ Mauvais
+#### ❌ Mauvais
 
 ```php
 final class SendDiscountEmailTask
@@ -1270,14 +1270,14 @@ Pourquoi c’est mauvais :
 
 ---
 
-## ✅ Bon
+#### ✅ Bon
 
 Le Service décide.  
 La Task exécute.
 
 ---
 
-# D.1 Règle de testabilité absolue
+### D.1 Règle de testabilité absolue
 
 Tout composant métier doit être testable unitairement.
 
@@ -1292,11 +1292,11 @@ Cela implique :
 
 ---
 
-# D.2 Règle de domaine métier unique
+### D.2 Règle de domaine métier unique
 
 Un composant appartient toujours à un seul domaine métier.
 
-## ✅ Bon
+#### ✅ Bon
 
 ```text
 PaymentService
@@ -1304,7 +1304,7 @@ DoctorAvailabilityService
 InvoiceCalculatorService
 ```
 
-## ❌ Mauvais
+#### ❌ Mauvais
 
 ```text
 UserPaymentInvoiceNotificationService
