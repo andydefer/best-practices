@@ -207,7 +207,7 @@ class TypedRecords implements TypedRecordsInterface
         return is_int($value) || is_string($value) || is_float($value) || is_bool($value) || $value === null;
     }
 
-    // ==================== MÉTHODES DE L'INTERFACE ====================
+    // ==================== INTERFACE METHODS ====================
 
     /**
      * Add one or multiple items.
