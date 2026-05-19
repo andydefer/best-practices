@@ -270,7 +270,7 @@ final class SendNotificationAction extends AbstractAction
 |------|----------------|---------|
 | `Record` | ✅ Recommandé | `function calculate(OrderRecord $record): float` |
 | `scalaire` (int, float, string, bool) | ✅ Recommandé | `function calculateTax(float $subtotal, string $country): float` |
-| `Enum` | ✅ Recommandé | `function filterByRole(UserRole $role): array` |
+| `Enum` | ✅ Recommandé | `function filterByRole(UserRole $role): TypedRecords` |
 | `TypedRecords` | ✅ Recommandé | `function processBatch(TypedRecords $records): TypedRecords` |
 | `Model` | ❌ **STRICTEMENT INTERDIT** | Un Service ne doit jamais recevoir de Model |
 | `Data` | ❌ **STRICTEMENT INTERDIT** | Un Service ne doit jamais recevoir de Data |
