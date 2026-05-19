@@ -165,7 +165,7 @@ $collection->each(function ($item) use (&$sum) {
 $numbers = new TypedRecords('int');
 $numbers->add(3, 1, 2);
 
-$sorted = $numbers->sort(); // [1, 2, 3]
+$sorted = $numbers->sort(); // TypedRecords [1, 2, 3]
 ```
 
 ### 6.6 sortBy() - Trier par clé ou fonction
