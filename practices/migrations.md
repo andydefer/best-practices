@@ -261,6 +261,104 @@ Schema::create('user_preferences', function (Blueprint $table) {
 });
 ```
 
+### 5.3 Comprendre la règle des 10 champs
+
+La règle des 10 champs n'est pas une limite technique stricte.  
+C'est une règle architecturale destinée à détecter les responsabilités transversales et à éviter les tables monolithiques.
+
+Lorsqu'une table commence à dépasser 10 champs, cela signifie souvent qu'elle mélange plusieurs responsabilités métier ou qu'elle contient des données réutilisables par plusieurs entités du système.
+
+L'objectif n'est donc pas simplement de "réduire le nombre de colonnes", mais de repérer les groupes de champs qui représentent en réalité une capacité métier autonome.
+
+#### Exemple de champs transversaux
+
+Certains champs apparaissent naturellement dans plusieurs modèles :
+
+| Champ | Entités concernées |
+|---|---|
+| phone | User, Doctor, Clinic, Company |
+| avatar/image | User, Clinic, Category, Product |
+| address | User, Clinic, Supplier |
+| settings | User, Organization, Team |
+| metadata | Plusieurs entités |
+
+Lorsque plusieurs modèles partagent les mêmes groupes de champs, cela indique souvent qu'il faut extraire ces données dans une structure dédiée et réutilisable.
+
+#### Mauvaise approche : duplication
+
+```php
+doctors.phone
+clinics.phone
+companies.phone
+users.phone
+```
+
+```php
+doctors.avatar
+clinics.avatar
+categories.avatar
+products.avatar
+```
+
+Cette approche :
+- duplique la structure,
+- duplique la validation,
+- duplique la logique métier,
+- rend l'évolution difficile.
+
+#### Bonne approche : extraction d'une responsabilité transverse
+
+```php
+Schema::create('phones', function (Blueprint $table) {
+    $table->id();
+    $table->morphs('phoneable');
+    $table->string('country_code');
+    $table->string('number');
+    $table->timestamps();
+});
+```
+
+```php
+Schema::create('media', function (Blueprint $table) {
+    $table->id();
+    $table->morphs('mediaable');
+    $table->string('path');
+    $table->string('type');
+    $table->timestamps();
+});
+```
+
+Cette approche permet :
+- la mutualisation de la logique métier,
+- la réutilisation des Traits,
+- la centralisation des validations,
+- la réduction de la duplication,
+- l'évolution indépendante du sous-domaine.
+
+#### Règle d'interprétation
+
+Une table qui dépasse 10 champs doit déclencher une réflexion architecturale :
+
+> "Ces champs appartiennent-ils réellement à cette entité, ou représentent-ils une responsabilité transverse réutilisable ailleurs ?"
+
+Si un groupe de champs :
+- est partagé entre plusieurs modèles,
+- possède sa propre logique métier,
+- possède son propre cycle de vie,
+- peut évoluer indépendamment,
+
+alors il doit probablement devenir une entité autonome, souvent via une relation polymorphique.
+
+#### Objectif réel de la règle
+
+La règle des 10 champs sert principalement à :
+
+- détecter les responsabilités multiples,
+- identifier les sous-domaines réutilisables,
+- éviter les tables monolithiques,
+- favoriser la mutualisation métier,
+- préparer l'évolutivité du système.
+
 ---
 
 ## 6. Relations polymorphiques (⚠️ RÈGLE IMPORTANTE)
