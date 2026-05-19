@@ -114,7 +114,7 @@ final class NotificationService
 | Critère | Service | Worker | Task |
 |---------|---------|--------|------|
 | **Rôle** | Logique métier | Orchestration | Effet de bord unique ou même nature |
-| **Retour** | Valeur (scalaire, Record, array) | `void` | `mixed` ou `void` |
+| **Retour** | Valeur (scalaire, Record, TypedRecords) | `void` | `mixed` ou `void` |
 | **Transaction DB** | ✅ Oui (si nécessaire) | ❌ Non | ❌ Non |
 | **Logique métier** | ✅ Oui | ❌ Non | ❌ Non |
 | **Plusieurs méthodes** | ✅ Oui (même domaine) | ❌ Non (une seule) | ❌ Non (une seule) |
@@ -1142,11 +1142,31 @@ Une Task :
 ```php
 final class CreateUserResourcesTask
 {
-    public function execute(UserRecord $user): void
+    public function __construct(
+        private readonly UserRepository $userRepository,
+        private readonly UserLogRepository $userLogRepository,
+        private readonly UserSettingsRepository $userSettingsRepository,
+    ) {}
+
+    public function execute(UserRecord $record): void
     {
-        UserModel::create([...]);
-        UserLogModel::create([...]);
-        UserSettingsModel::create([...]);
+        $this->userRepository->create($record);
+
+        $this->userLogRepository->create(
+            new CreateUserLogRecord(
+                userId: $record->id,
+                action: 'user_created',
+                createdBy: $record->createdBy,
+            ),
+        );
+
+        $this->userSettingsRepository->create(
+            new CreateUserSettingsRecord(
+                userId: $record->id,
+                language: 'fr',
+                notificationsEnabled: true,
+            ),
+        );
     }
 }
 ```
