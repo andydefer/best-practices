@@ -557,6 +557,129 @@ final class TogglePostLikeAction extends AbstractAction
 }
 ```
 
+### 7.4 Séparation stricte entre Traits et Models (⚠️ RÈGLE IMPORTANTE)
+
+Les Traits relationnels ne doivent contenir aucune logique intrinsèque au Model partagé.  
+Inversement, le Model partagé ne doit pas contenir de logique spécifique aux entités qui consomment la relation.
+
+L'objectif est de centraliser chaque responsabilité au bon endroit.
+
+#### Règle d'or
+
+- Le Trait contient :
+  - les relations,
+  - les méthodes utilitaires communes aux entités consommatrices.
+
+- Le Model partagé contient :
+  - les scopes,
+  - les règles intrinsèques à sa propre entité,
+  - les comportements liés à sa structure.
+
+#### Exemple avec un système de Media
+
+Le système `Media` est partagé entre plusieurs entités :
+
+- User
+- Clinic
+- Product
+- Category
+
+Toutes ces entités ont besoin :
+- d'accéder à leurs médias,
+- de récupérer leur avatar,
+- de récupérer une bannière,
+- etc.
+
+Le Trait devient donc l'endroit où l'on mutualise ces accès relationnels.
+
+#### Bonne approche : relation + accès partagé dans le Trait
+
+```php
+trait HasMedia
+{
+    public function media(): MorphMany
+    {
+        return $this->morphMany(Media::class, 'mediaable');
+    }
+
+    public function getAvatar(): ?Media
+    {
+        return $this->media()
+            ->avatar()
+            ->first();
+    }
+
+    public function getBanner(): ?Media
+    {
+        return $this->media()
+            ->banner()
+            ->first();
+    }
+}
+```
+
+Ici :
+- `getAvatar()` appartient au Trait,
+- car toutes les entités qui utilisent `HasMedia` ont besoin de cette logique.
+
+Cette méthode est une logique de consommation de relation, pas une logique intrinsèque au Model `Media`.
+
+#### Le Model partagé contient uniquement sa logique intrinsèque
+
+```php
+final class Media extends Model
+{
+    public function scopeAvatar(Builder $query): Builder
+    {
+        return $query->where('type', 'avatar');
+    }
+
+    public function scopeBanner(Builder $query): Builder
+    {
+        return $query->where('type', 'banner');
+    }
+}
+```
+
+Ici :
+- `scopeAvatar()` appartient au Model `Media`,
+- car le concept de `avatar` est intrinsèque à l'entité `Media`.
+
+Le scope décrit comment filtrer des médias.  
+Il ne dépend pas des modèles consommateurs.
+
+#### Séparation des responsabilités
+
+| Élément | Responsabilité |
+|---|---|
+| Trait | Consommation et accès relationnel partagé |
+| Model partagé | Scopes et logique intrinsèque à l'entité |
+| Task / Service | Logique métier complexe |
+
+#### Mauvaise approche : scopes dans les Traits
+
+```php
+trait HasMedia
+{
+    public function scopeAvatar(Builder $query): Builder
+    {
+        return $query->where('type', 'avatar');
+    }
+}
+```
+
+Pourquoi c'est mauvais :
+- le scope appartient à `Media`,
+- le Trait devient couplé à la structure interne du Model,
+- les responsabilités deviennent floues.
+
+#### Règle d'interprétation
+
+Si la logique :
+- décrit comment filtrer ou manipuler l'entité partagée → elle appartient au Model partagé,
+- décrit comment une autre entité consomme cette relation → elle appartient au Trait,
+- décrit une action métier → elle appartient à une Task ou un Service.
+
 ---
 
 ## 8. Éviter les champs compteurs (⚠️ RÈGLE IMPORTANTE)
