@@ -356,7 +356,6 @@ $nested->add($tags, $ids);
 | Méthode | Description | Exemple |
 |---------|-------------|---------|
 | `add(...$items)` | Ajoute un ou plusieurs éléments | `$tags->add('developer', 'laravel')` |
-| `concat(array $items)` | Ajoute plusieurs éléments depuis un tableau | `$tags->concat(['a', 'b', 'c'])` |
 | `all(): array` | Retourne tous les éléments | `$tags->all()` |
 | `count(): int` | Nombre d'éléments | `$tags->count()` |
 | `isEmpty(): bool` | Vérifie si vide | `$tags->isEmpty()` |
