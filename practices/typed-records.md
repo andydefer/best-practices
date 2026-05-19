@@ -76,9 +76,6 @@ $mixed = typed_records('int', 'float', 'string');
 // add() - Ajoute un ou plusieurs éléments
 $collection->add('hello');                    // un seul élément
 $collection->add('a', 'b', 'c');              // plusieurs éléments
-
-// concat() - Ajoute plusieurs éléments depuis un tableau
-$collection->concat(['a', 'b', 'c']);
 ```
 
 ### 5.2 Lecture des éléments
