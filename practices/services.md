@@ -53,7 +53,7 @@ final class DoctorAvailabilityService
 {
     public function nextAvailableSlot(DoctorRecord $doctor): SlotRecord { ... }
     public function isAvailableAt(DoctorRecord $doctor, DateTimeInterface $time): bool { ... }
-    public function getSlots(DoctorRecord $doctor, DateRangeRecord $range): array { ... }
+    public function getSlots(DoctorRecord $doctor, DateRangeRecord $range): TypedRecords { ... }
 }
 ```
 
