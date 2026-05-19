@@ -287,7 +287,7 @@ final class SendNotificationAction extends AbstractAction
 | `scalaire` (int, float, string, bool) | ✅ Recommandé | `return $total` |
 | `Enum` | ✅ Recommandé | `return UserRole::ADMIN` |
 | `TypedRecords` | ✅ Recommandé | `return $slots` |
-| `Model` | ⚠️ Acceptable mais moins bon | Préférer un `Record` |
+| `Model` | ❌ Interdit | Préférer un `Record` |
 | `Data` | ❌ Interdit | Les Services ne doivent pas connaître la couche API |
 
 ### 5.3 Interdiction stricte : les Data
