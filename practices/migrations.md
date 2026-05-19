@@ -117,6 +117,99 @@ $table->boolean('active');               // ❌ is_ manquant
 $table->date('published');               // ❌ _at manquant
 ```
 
+### 3.4 Suppression logique (Soft Deletes) (⚠️ RÈGLE IMPORTANTE)
+
+Privilégiez toujours les suppressions logiques via `softDeletes()` plutôt que les suppressions physiques (`delete`) directes.
+
+#### Pourquoi éviter les suppressions physiques ?
+
+Une suppression physique :
+- détruit définitivement la donnée,
+- casse l'historique métier,
+- complique les audits,
+- rend les restaurations impossibles,
+- peut casser des relations ou des statistiques historiques.
+
+Dans un système métier réel, une donnée supprimée conserve souvent une valeur historique.
+
+#### Bonne approche : suppression logique
+
+```php
+Schema::create('users', function (Blueprint $table) {
+    $table->id();
+    $table->string('name');
+    $table->string('email');
+    $table->softDeletes();
+    $table->timestamps();
+});
+```
+
+```php
+final class User extends Model
+{
+    use SoftDeletes;
+}
+```
+
+Laravel ajoutera automatiquement :
+
+```php
+deleted_at
+```
+
+Lorsqu'un modèle est supprimé :
+
+```php
+$user->delete();
+```
+
+la ligne reste présente en base de données, mais devient invisible dans les requêtes normales.
+
+#### Avantages des Soft Deletes
+
+Les suppressions logiques permettent :
+
+- la restauration des données,
+- l'audit métier,
+- la traçabilité,
+- la conservation des relations historiques,
+- la sécurité contre les suppressions accidentelles,
+- la conformité réglementaire dans certains domaines.
+
+#### Cas d'usage typiques
+
+Les Soft Deletes sont particulièrement recommandés pour :
+
+- Users
+- Orders
+- Payments
+- Appointments
+- Clinics
+- Products
+- Invoices
+- Messages
+- Documents
+
+#### Exception : données purement techniques ou temporaires
+
+Certaines tables peuvent utiliser des suppressions physiques :
+
+- cache,
+- sessions,
+- logs temporaires,
+- tokens expirés,
+- tables de pivot techniques sans valeur métier.
+
+#### Règle d'or
+
+Toute donnée possédant :
+- une valeur métier,
+- une valeur historique,
+- une relation importante,
+- une possibilité de restauration,
+
+doit utiliser `softDeletes()`.
+
 ---
 
 ## 4. Gestion des Enums (⚠️ RÈGLE IMPORTANTE)
