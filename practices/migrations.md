@@ -991,3 +991,385 @@ final class ToggleLikeTask extends AbstractTask
     }
 }
 ```
+
+## 14. Recommandations architecturales
+
+Les règles suivantes sont des recommandations fortement conseillées afin de maintenir une architecture cohérente, évolutive et maintenable sur le long terme.
+
+### 14.1 Identifier les responsabilités transversales
+
+Lorsqu'un groupe de champs est partagé entre plusieurs entités, il représente souvent une responsabilité transverse qui doit être extraite dans une structure dédiée.
+
+Exemples fréquents :
+- Media
+- Phone
+- Address
+- Comment
+- Rating
+- Tag
+- Settings
+
+Privilégiez :
+- les relations polymorphiques,
+- les Traits relationnels,
+- les Models partagés,
+- la mutualisation de la logique métier.
+
+---
+
+### 14.2 Utiliser les Enums PHP comme machine d'état
+
+Lorsqu'une entité possède plusieurs booléens représentant des états métier, préférez un champ unique casté vers un Enum PHP.
+
+#### ❌ Mauvais
+
+```php
+$table->boolean('is_active');
+$table->boolean('is_pending');
+$table->boolean('is_blocked');
+$table->boolean('is_verified');
+```
+
+#### ✅ Bon
+
+```php
+$table->string('status');
+```
+
+```php
+enum UserStatus: string
+{
+    case ACTIVE = 'active';
+    case PENDING = 'pending';
+    case BLOCKED = 'blocked';
+}
+```
+
+Cette approche :
+- évite les incohérences,
+- simplifie les transitions d'état,
+- améliore la lisibilité métier.
+
+---
+
+### 14.3 Indexer les colonnes métier importantes
+
+Toute colonne fréquemment utilisée dans :
+- les filtres,
+- les recherches,
+- les jointures,
+- les relations,
+- les tris,
+
+doit être indexée explicitement.
+
+Exemples :
+- status
+- email
+- created_at
+- published_at
+- foreign keys
+- colonnes polymorphiques
+
+#### ✅ Bon
+
+```php
+$table->string('status');
+$table->index('status');
+```
+
+---
+
+### 14.4 Transformer les tables pivot enrichies en vraies entités
+
+Une table pivot qui commence à contenir :
+- des états,
+- des timestamps métier,
+- des permissions,
+- des métadonnées,
+- des comportements,
+
+n'est plus une simple table pivot.
+
+#### ❌ Mauvais
+
+```php
+role_user
+- role_id
+- user_id
+- assigned_by
+- expires_at
+- status
+```
+
+#### ✅ Bon
+
+```php
+memberships
+user_roles
+subscriptions
+```
+
+Cette approche améliore :
+- la lisibilité métier,
+- l'évolutivité,
+- la séparation des responsabilités.
+
+---
+
+### 14.5 Centraliser les comportements intrinsèques dans le Model partagé
+
+Lorsqu'un Model est partagé entre plusieurs entités :
+- ses scopes,
+- ses filtres,
+- ses comportements intrinsèques,
+
+doivent rester dans ce Model.
+
+Les Traits relationnels servent uniquement :
+- à exposer les relations,
+- à mutualiser les accès relationnels des entités consommatrices.
+
+---
+
+### 14.6 Préférer les données calculées plutôt que stockées
+
+Une donnée calculable ne doit pas être stockée sauf nécessité métier, historique ou de performance.
+
+#### ❌ Mauvais
+
+```php
+full_name
+age
+total_price
+```
+
+#### ✅ Bon
+
+Calculer la valeur dynamiquement ou utiliser un accessor.
+
+Cette approche :
+- réduit les incohérences,
+- évite les synchronisations inutiles,
+- améliore l'intégrité des données.
+
+---
+
+### 14.7 Les Soft Deletes doivent être la norme
+
+Toute donnée métier importante doit privilégier :
+- `softDeletes()`,
+- la conservation historique,
+- la restauration des données.
+
+Les suppressions physiques doivent rester exceptionnelles.
+
+
+## 15. Interdictions architecturales
+
+Les pratiques suivantes sont interdites car elles nuisent à la maintenabilité, à la cohérence ou à l'évolutivité du système.
+
+### 15.1 Interdiction des JSON fourre-tout
+
+Les colonnes JSON ne doivent pas remplacer une vraie modélisation relationnelle.
+
+#### ❌ Mauvais
+
+```json
+{
+  "phone": "...",
+  "address": "...",
+  "city": "..."
+}
+```
+
+Utilisez des colonnes dédiées ou une table spécialisée lorsque la structure est connue.
+
+Les champs JSON sont réservés :
+- aux données dynamiques,
+- aux payloads externes,
+- aux métadonnées non structurées,
+- aux préférences flexibles.
+
+---
+
+### 15.2 Interdiction des colonnes nullable sans justification métier
+
+Une colonne ne doit être nullable que si l'absence de valeur possède un sens métier réel.
+
+#### ❌ Mauvais
+
+```php
+$table->string('email')->nullable();
+$table->string('name')->nullable();
+```
+
+Cette pratique :
+- fragilise les validations,
+- produit des données incohérentes,
+- augmente la complexité métier.
+
+---
+
+### 15.3 Interdiction des relations implicites sans contrainte SQL
+
+Toute relation non polymorphique doit avoir une contrainte SQL explicite.
+
+#### ❌ Mauvais
+
+```php
+$table->unsignedBigInteger('user_id');
+```
+
+#### ✅ Bon
+
+```php
+$table->foreignIdFor(User::class)
+    ->constrained()
+    ->onDelete('cascade');
+```
+
+---
+
+### 15.4 Interdiction des noms génériques
+
+Les noms génériques sont interdits :
+
+#### ❌ Interdits
+
+```php
+data
+info
+payload
+item
+object
+value
+manager
+handler
+service
+```
+
+Préférez des noms métier explicites.
+
+#### ✅ Bon
+
+```php
+payment_status
+invoice_number
+media_path
+appointment_started_at
+```
+
+---
+
+### 15.5 Interdiction des Models "God Object"
+
+Un Model ne doit pas :
+- appeler des APIs externes,
+- envoyer des emails,
+- gérer des paiements,
+- uploader des fichiers,
+- contenir une logique métier complexe,
+- dépendre de services externes.
+
+Le Model représente :
+- la donnée,
+- les relations,
+- quelques comportements simples intrinsèques.
+
+Toute logique métier complexe doit être déplacée :
+- dans une Task,
+- un Service métier,
+- ou une Action.
+
+---
+
+### 15.6 Interdiction des suppressions physiques par défaut
+
+Les suppressions physiques (`forceDelete`) sont interdites sauf :
+- données temporaires,
+- cache,
+- sessions,
+- tokens expirés,
+- tables techniques sans valeur métier.
+
+Les données métier doivent utiliser :
+- `softDeletes()`,
+- `deleted_at`.
+
+---
+
+### 15.7 Interdiction des colonnes dérivées inutiles
+
+Une donnée calculable ne doit pas être stockée sans justification métier ou de performance.
+
+#### ❌ Mauvais
+
+```php
+full_name
+age
+likes_count
+total_price
+```
+
+Ces colonnes créent :
+- des risques de désynchronisation,
+- des incohérences,
+- une complexité inutile.
+
+---
+
+### 15.8 Interdiction des scopes dans les Traits relationnels
+
+Les Traits relationnels ne doivent pas contenir :
+- des scopes,
+- des filtres,
+- des comportements intrinsèques au Model partagé.
+
+Les scopes appartiennent au Model concerné.
+
+#### ❌ Mauvais
+
+```php
+trait HasMedia
+{
+    public function scopeAvatar(...)
+    {
+        // ...
+    }
+}
+```
+
+#### ✅ Bon
+
+```php
+final class Media extends Model
+{
+    public function scopeAvatar(...)
+    {
+        // ...
+    }
+}
+```
+
+---
+
+### 15.9 Interdiction du polymorphisme sans concept partagé réel
+
+Une relation polymorphique ne doit pas être utilisée uniquement "par flexibilité".
+
+Le polymorphisme doit représenter :
+- une vraie responsabilité transverse,
+- un vrai concept partagé métier.
+
+#### ✅ Bons cas
+
+- Media
+- Comment
+- Rating
+- Tag
+- Like
+
+#### ❌ Mauvais cas
+
+Créer une relation polymorphique alors qu'une seule entité consomme réellement la relation.
