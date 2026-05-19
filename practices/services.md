@@ -603,7 +603,10 @@ app/Services/
 
 ### 7.3 Règle d'or
 
-> **Un Service ne doit jamais avoir d'effet de bord directement. Il délègue TOUJOURS les effets de bord à des Tasks ou des Workers.**
+> **Un Service ne doit pas exécuter directement des effets de bord techniques externes
+(email, cache, HTTP, filesystem, queue, websocket, etc.).**
+
+**Ces effets doivent être délégués à des Tasks ou Workers.**
 
 ```php
 // ✅ BON - Service délègue à une Task
