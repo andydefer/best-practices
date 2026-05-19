@@ -1,7 +1,3 @@
-Voici la version finale du fichier `actions.md` que nous avons écrite ensemble :
-
----
-
 # Principe d'usage des Actions (Version finale)
 
 ## 1. Définition
