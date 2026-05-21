@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AndyDefer\BestPractices\Tests\Logger\Unit\Services\Tasks;
+namespace AndyDefer\BestPractices\Tests\Logger\Unit\Tasks;
 
 use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
 use AndyDefer\BestPractices\Logger\Config\LoggerConfig;
@@ -12,8 +12,8 @@ use AndyDefer\BestPractices\Logger\Records\LogQueryRecord;
 use AndyDefer\BestPractices\Logger\Records\LogRecord;
 use AndyDefer\BestPractices\Logger\Services\LogPathService;
 use AndyDefer\BestPractices\Logger\Services\LogSerializerService;
-use AndyDefer\BestPractices\Logger\Services\Tasks\QueryLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\WriteLogTask;
+use AndyDefer\BestPractices\Logger\Tasks\QueryLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\WriteLogTask;
 use AndyDefer\BestPractices\Tests\TestCase;
 
 final class QueryLogsTaskTest extends TestCase
@@ -66,6 +66,14 @@ final class QueryLogsTaskTest extends TestCase
         );
     }
 
+    private function getFullDayRange(): array
+    {
+        return [
+            'from' => $this->currentDate.'T00:00:00Z',
+            'to' => $this->currentDate.'T23:59:59Z',
+        ];
+    }
+
     public function test_execute_returns_all_logs_when_no_filters(): void
     {
         $this->writeTask->execute($this->createLogRecord(
@@ -82,7 +90,13 @@ final class QueryLogsTaskTest extends TestCase
             payloadData: [123],
         ));
 
-        $query = new LogQueryRecord;
+        $range = $this->getFullDayRange();
+        $query = new LogQueryRecord(
+            from: $range['from'],
+            to: $range['to'],
+            type: null,
+            level: null,
+        );
         $results = $this->queryTask->execute($query);
 
         $this->assertSame(2, $results->count());
@@ -111,7 +125,13 @@ final class QueryLogsTaskTest extends TestCase
             payloadData: [123],
         ));
 
-        $query = new LogQueryRecord(type: 'user_login');
+        $range = $this->getFullDayRange();
+        $query = new LogQueryRecord(
+            from: $range['from'],
+            to: $range['to'],
+            type: 'user_login',
+            level: null,
+        );
         $results = $this->queryTask->execute($query);
 
         $this->assertSame(2, $results->count());
@@ -144,7 +164,13 @@ final class QueryLogsTaskTest extends TestCase
             payloadData: ['high_memory'],
         ));
 
-        $query = new LogQueryRecord(level: LogLevel::ERROR);
+        $range = $this->getFullDayRange();
+        $query = new LogQueryRecord(
+            from: $range['from'],
+            to: $range['to'],
+            type: null,
+            level: LogLevel::ERROR,
+        );
         $results = $this->queryTask->execute($query);
 
         $this->assertSame(1, $results->count());
@@ -177,6 +203,8 @@ final class QueryLogsTaskTest extends TestCase
         $query = new LogQueryRecord(
             from: $this->currentDate.'T10:00:00Z',
             to: $this->currentDate.'T10:59:59Z',
+            type: null,
+            level: null,
         );
 
         $results = $this->queryTask->execute($query);
@@ -208,11 +236,13 @@ final class QueryLogsTaskTest extends TestCase
             payloadData: [123],
         ));
 
+        $range = $this->getFullDayRange();
         $query = new LogQueryRecord(
+            from: $range['from'],
+            to: $range['to'],
             type: 'user_login',
             level: LogLevel::INFO,
         );
-
         $results = $this->queryTask->execute($query);
 
         $this->assertSame(2, $results->count());
@@ -227,7 +257,13 @@ final class QueryLogsTaskTest extends TestCase
             payloadData: [1],
         ));
 
-        $query = new LogQueryRecord(type: 'nonexistent_type');
+        $range = $this->getFullDayRange();
+        $query = new LogQueryRecord(
+            from: $range['from'],
+            to: $range['to'],
+            type: 'nonexistent_type',
+            level: null,
+        );
         $results = $this->queryTask->execute($query);
 
         $this->assertSame(0, $results->count());
@@ -250,7 +286,13 @@ final class QueryLogsTaskTest extends TestCase
 
         $this->writeTask->execute($record);
 
-        $query = new LogQueryRecord(type: 'user_login');
+        $range = $this->getFullDayRange();
+        $query = new LogQueryRecord(
+            from: $range['from'],
+            to: $range['to'],
+            type: 'user_login',
+            level: null,
+        );
         $results = $this->queryTask->execute($query);
 
         $this->assertSame(0, $results->count());
@@ -272,7 +314,13 @@ final class QueryLogsTaskTest extends TestCase
             payloadData: [42],
         )), FILE_APPEND);
 
-        $query = new LogQueryRecord;
+        $range = $this->getFullDayRange();
+        $query = new LogQueryRecord(
+            from: $range['from'],
+            to: $range['to'],
+            type: null,
+            level: null,
+        );
         $results = $this->queryTask->execute($query);
 
         // La ligne corrompue doit être ignorée, seule la ligne valide est lue

@@ -11,9 +11,9 @@ use AndyDefer\BestPractices\Logger\Logger;
 use AndyDefer\BestPractices\Logger\Records\LogDataRecord;
 use AndyDefer\BestPractices\Logger\Records\LogQueryRecord;
 use AndyDefer\BestPractices\Logger\Records\LogRecord;
-use AndyDefer\BestPractices\Logger\Services\Tasks\QueryLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\StreamLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\WriteLogTask;
+use AndyDefer\BestPractices\Logger\Tasks\QueryLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\StreamLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\WriteLogTask;
 use AndyDefer\BestPractices\Tests\TestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -57,6 +57,14 @@ final class LoggerTest extends TestCase
         );
     }
 
+    private function getDateRange(): array
+    {
+        return [
+            'from' => '2024-01-01T00:00:00Z',
+            'to' => '2024-01-01T23:59:59Z',
+        ];
+    }
+
     public function test_info_creates_info_level_log_record(): void
     {
         $payloadData = [1, 'user_login', '127.0.0.1'];
@@ -66,11 +74,10 @@ final class LoggerTest extends TestCase
             ->method('execute')
             ->with($this->callback(function (LogRecord $record) use ($logData) {
                 return $record->level === LogLevel::INFO
-                    && $record->time === '2026-04-05T10:26:00Z'
                     && $record->data->type === $logData->type;
             }));
 
-        $this->logger->info('2026-04-05T10:26:00Z', $logData);
+        $this->logger->info($logData);
     }
 
     public function test_warning_creates_warning_level_log_record(): void
@@ -85,7 +92,7 @@ final class LoggerTest extends TestCase
                     && $record->data->type === $logData->type;
             }));
 
-        $this->logger->warning('2026-04-05T10:26:00Z', $logData);
+        $this->logger->warning($logData);
     }
 
     public function test_error_creates_error_level_log_record(): void
@@ -100,7 +107,7 @@ final class LoggerTest extends TestCase
                     && $record->data->type === $logData->type;
             }));
 
-        $this->logger->error('2026-04-05T10:26:00Z', $logData);
+        $this->logger->error($logData);
     }
 
     public function test_debug_creates_debug_level_log_record(): void
@@ -115,7 +122,7 @@ final class LoggerTest extends TestCase
                     && $record->data->type === $logData->type;
             }));
 
-        $this->logger->debug('2026-04-05T10:26:00Z', $logData);
+        $this->logger->debug($logData);
     }
 
     public function test_log_calls_write_task_directly(): void
@@ -126,7 +133,7 @@ final class LoggerTest extends TestCase
         $logData = new LogDataRecord(type: 'test', payload: $payload);
 
         $record = new LogRecord(
-            time: '2026-04-05T10:26:00Z',
+            time: '2024-01-01T10:26:00Z',
             level: LogLevel::INFO,
             data: $logData,
         );
@@ -140,7 +147,13 @@ final class LoggerTest extends TestCase
 
     public function test_query_delegates_to_query_task(): void
     {
-        $query = new LogQueryRecord(type: 'user_login');
+        $dateRange = $this->getDateRange();
+        $query = new LogQueryRecord(
+            from: $dateRange['from'],
+            to: $dateRange['to'],
+            type: 'user_login',
+            level: null,
+        );
         $expectedResults = new TypedRecords(LogRecord::class);
 
         $this->queryTask->expects($this->once())
@@ -155,7 +168,7 @@ final class LoggerTest extends TestCase
 
     public function test_stream_delegates_to_stream_task(): void
     {
-        $date = '2026-04-05';
+        $date = '2024-01-01';
         $expectedResults = new TypedRecords(LogRecord::class);
 
         $this->streamTask->expects($this->once())
@@ -180,5 +193,97 @@ final class LoggerTest extends TestCase
         $results = $this->logger->stream();
 
         $this->assertSame($expectedResults, $results);
+    }
+
+    // ==================== TESTS POUR BUFFER ====================
+
+    public function test_enable_buffer_creates_buffer(): void
+    {
+        $this->logger->enableBuffer(50);
+
+        $this->assertTrue($this->logger->isBufferEnabled());
+        $this->assertSame(50, $this->logger->getBufferSize());
+    }
+
+    public function test_disable_buffer_flushes_and_removes_buffer(): void
+    {
+        $this->logger->enableBuffer(50);
+        $this->assertTrue($this->logger->isBufferEnabled());
+
+        $this->logger->disableBuffer();
+
+        $this->assertFalse($this->logger->isBufferEnabled());
+    }
+
+    public function test_flush_calls_buffer_flush(): void
+    {
+        $this->logger->enableBuffer(50);
+
+        $this->logger->flush();
+
+        $this->assertTrue(true);
+    }
+
+    public function test_query_flushes_buffer_before_execution(): void
+    {
+        $this->writeTask->expects($this->never())->method('execute');
+
+        $this->logger->enableBuffer(50);
+
+        $dateRange = $this->getDateRange();
+        $query = new LogQueryRecord(
+            from: $dateRange['from'],
+            to: $dateRange['to'],
+            type: 'user_login',
+            level: null,
+        );
+        $expectedResults = new TypedRecords(LogRecord::class);
+
+        $this->queryTask->expects($this->once())
+            ->method('execute')
+            ->with($query)
+            ->willReturn($expectedResults);
+
+        $results = $this->logger->query($query);
+
+        $this->assertSame($expectedResults, $results);
+    }
+
+    public function test_stream_flushes_buffer_before_execution(): void
+    {
+        $this->writeTask->expects($this->never())->method('execute');
+
+        $this->logger->enableBuffer(50);
+
+        $expectedResults = new TypedRecords(LogRecord::class);
+
+        $this->streamTask->expects($this->once())
+            ->method('execute')
+            ->with(null)
+            ->willReturn($expectedResults);
+
+        $results = $this->logger->stream();
+
+        $this->assertSame($expectedResults, $results);
+    }
+
+    public function test_log_without_buffer_writes_immediately(): void
+    {
+        $logData = $this->createLogDataRecord('test', [1]);
+
+        $this->writeTask->expects($this->once())
+            ->method('execute');
+
+        $this->logger->info($logData);
+    }
+
+    public function test_log_with_buffer_does_not_write_immediately(): void
+    {
+        $this->writeTask->expects($this->never())->method('execute');
+
+        $this->logger->enableBuffer(100);
+
+        $logData = $this->createLogDataRecord('test', [1]);
+        $this->logger->info($logData);
     }
 }

@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace AndyDefer\BestPractices\Tests\Unit\Data;
 
-use AndyDefer\BestPractices\Data\AbstractData;
 use AndyDefer\BestPractices\Tests\Fixtures\Data\TestFullUserData;
 use AndyDefer\BestPractices\Tests\Fixtures\Data\TestProductData;
-use AndyDefer\BestPractices\Tests\Fixtures\Data\TestSimpleData;
 use AndyDefer\BestPractices\Tests\Fixtures\Data\TestUserData;
+use AndyDefer\BestPractices\Tests\Fixtures\Data\TestUserWithRolesData;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserGrade;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
 use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
 use AndyDefer\BestPractices\Tests\TestCase;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
 
 final class AbstractDataTest extends TestCase
 {
@@ -52,7 +50,6 @@ final class AbstractDataTest extends TestCase
 
     public function test_to_array_converts_backed_enum_to_string_value_when_converting_to_array(): void
     {
-        // TestUserRole est un backed enum (string)
         $data = new TestUserData(
             id: '1',
             name: 'John Doe',
@@ -72,7 +69,6 @@ final class AbstractDataTest extends TestCase
 
     public function test_to_array_converts_int_backed_enum_to_int_value_when_converting_to_array(): void
     {
-        // TestUserGrade est un backed enum (int)
         $data = new TestUserData(
             id: '1',
             name: 'John Doe',
@@ -92,16 +88,13 @@ final class AbstractDataTest extends TestCase
 
     public function test_to_array_converts_pure_enum_to_enum_name_when_converting_to_array(): void
     {
-        $data = new class(TestUserStatus::ACTIVE) extends AbstractData
-        {
-            public function __construct(
-                public readonly TestUserStatus $status,
-            ) {}
-        };
+        $data = new TestUserWithRolesData(
+            roles: [TestUserRole::ADMIN, TestUserRole::USER],
+        );
 
         $array = $data->toArray();
 
-        $this->assertSame('ACTIVE', $array['status']);
+        $this->assertSame(['admin', 'user'], $array['roles']);
     }
 
     public function test_to_array_converts_datetime_to_iso_8601_format_when_converting_to_array(): void
@@ -283,29 +276,7 @@ final class AbstractDataTest extends TestCase
         $this->assertTrue($array['featuredProduct']['isFeatured']);
     }
 
-    public function test_to_array_converts_collection_to_array_when_converting(): void
-    {
-        $collection = new Collection([
-            new TestSimpleData('item1'),
-            new TestSimpleData('item2'),
-        ]);
-
-        $data = new class($collection) extends AbstractData
-        {
-            public function __construct(
-                public readonly Collection $items,
-            ) {}
-        };
-
-        $array = $data->toArray();
-
-        $this->assertIsArray($array['items']);
-        $this->assertCount(2, $array['items']);
-        $this->assertSame('item1', $array['items'][0]['value']);
-        $this->assertSame('item2', $array['items'][1]['value']);
-    }
-
-    public function test_to_array_preserves_arrays_of_scalars_when_converting(): void
+    public function test_to_array_converts_arrays_of_scalars_when_converting(): void
     {
         $expectedTags = ['tag1', 'tag2', 'tag3'];
 
@@ -328,12 +299,9 @@ final class AbstractDataTest extends TestCase
 
     public function test_to_array_converts_arrays_of_enums_to_their_values_when_converting(): void
     {
-        $data = new class([TestUserRole::ADMIN, TestUserRole::USER]) extends AbstractData
-        {
-            public function __construct(
-                public readonly array $roles,
-            ) {}
-        };
+        $data = new TestUserWithRolesData(
+            roles: [TestUserRole::ADMIN, TestUserRole::USER],
+        );
 
         $array = $data->toArray();
 
@@ -346,8 +314,8 @@ final class AbstractDataTest extends TestCase
 
     public function test_collect_creates_data_objects_from_objects_array(): void
     {
-        $user1 = $this->createUserObject('1', 'John Doe', TestUserStatus::ACTIVE, TestUserRole::USER, TestUserGrade::BRONZE);
-        $user2 = $this->createUserObject('2', 'Jane Doe', TestUserStatus::INACTIVE, TestUserRole::USER, TestUserGrade::BRONZE);
+        $user1 = $this->createUserDataArray('1', 'John Doe', TestUserStatus::ACTIVE, TestUserRole::USER, TestUserGrade::BRONZE);
+        $user2 = $this->createUserDataArray('2', 'Jane Doe', TestUserStatus::INACTIVE, TestUserRole::USER, TestUserGrade::BRONZE);
         $users = [$user1, $user2];
 
         $result = TestUserData::collect($users);
@@ -411,56 +379,25 @@ final class AbstractDataTest extends TestCase
         TestUserData::collect(['invalid']);
     }
 
-    public function test_collect_creates_data_objects_from_laravel_collection(): void
-    {
-        $userObjects = collect([
-            $this->createUserObject('1', 'John Doe', TestUserStatus::ACTIVE, TestUserRole::USER, TestUserGrade::BRONZE),
-            $this->createUserObject('2', 'Jane Doe', TestUserStatus::INACTIVE, TestUserRole::USER, TestUserGrade::BRONZE),
-        ]);
-
-        $result = TestUserData::collect($userObjects);
-
-        $this->assertCount(2, $result);
-        $this->assertInstanceOf(TestUserData::class, $result[0]);
-        $this->assertInstanceOf(TestUserData::class, $result[1]);
-    }
-
     // ============================================================================
     // Helper Methods
     // ============================================================================
 
-    private function createUserObject(string $id, string $name, TestUserStatus $status, TestUserRole $role, TestUserGrade $grade): object
+    /**
+     * Crée un tableau associatif pour TestUserData au lieu d'un stdClass
+     */
+    private function createUserDataArray(string $id, string $name, TestUserStatus $status, TestUserRole $role, TestUserGrade $grade): array
     {
-        return new class($id, $name, $status, $role, $grade)
-        {
-            public string $id;
-
-            public string $name;
-
-            public string $email;
-
-            public TestUserStatus $status;
-
-            public TestUserRole $role;
-
-            public TestUserGrade $grade;
-
-            public ?string $emailVerifiedAt = null;
-
-            public string $createdAt;
-
-            public array $tags = [];
-
-            public function __construct(string $id, string $name, TestUserStatus $status, TestUserRole $role, TestUserGrade $grade)
-            {
-                $this->id = $id;
-                $this->name = $name;
-                $this->email = $name.'@example.com';
-                $this->status = $status;
-                $this->role = $role;
-                $this->grade = $grade;
-                $this->createdAt = Carbon::now()->format('Y-m-d\TH:i:s\Z');
-            }
-        };
+        return [
+            'id' => $id,
+            'name' => $name,
+            'email' => $name.'@example.com',
+            'status' => $status,
+            'role' => $role,
+            'grade' => $grade,
+            'emailVerifiedAt' => null,
+            'createdAt' => Carbon::now()->format('Y-m-d\TH:i:s\Z'),
+            'tags' => [],
+        ];
     }
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AndyDefer\BestPractices\Tests\Logger\Unit\Services\Tasks;
+namespace AndyDefer\BestPractices\Tests\Logger\Unit\Tasks;
 
 use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
 use AndyDefer\BestPractices\Logger\Config\LoggerConfig;
@@ -11,7 +11,7 @@ use AndyDefer\BestPractices\Logger\Records\LogDataRecord;
 use AndyDefer\BestPractices\Logger\Records\LogRecord;
 use AndyDefer\BestPractices\Logger\Services\LogPathService;
 use AndyDefer\BestPractices\Logger\Services\LogSerializerService;
-use AndyDefer\BestPractices\Logger\Services\Tasks\WriteLogTask;
+use AndyDefer\BestPractices\Logger\Tasks\WriteLogTask;
 use AndyDefer\BestPractices\Tests\TestCase;
 use ErrorException;
 use RuntimeException;

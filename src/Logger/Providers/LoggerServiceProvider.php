@@ -4,14 +4,16 @@ declare(strict_types=1);
 
 namespace AndyDefer\BestPractices\Logger\Providers;
 
+use AndyDefer\BestPractices\Logger\Commands\LoggerCleanCommand;
 use AndyDefer\BestPractices\Logger\Config\LoggerConfig;
 use AndyDefer\BestPractices\Logger\Contracts\LoggerInterface;
 use AndyDefer\BestPractices\Logger\Logger;
+use AndyDefer\BestPractices\Logger\Services\LogCleanerService;
 use AndyDefer\BestPractices\Logger\Services\LogPathService;
 use AndyDefer\BestPractices\Logger\Services\LogSerializerService;
-use AndyDefer\BestPractices\Logger\Services\Tasks\QueryLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\StreamLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\WriteLogTask;
+use AndyDefer\BestPractices\Logger\Tasks\QueryLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\StreamLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\WriteLogTask;
 use Illuminate\Support\ServiceProvider;
 
 class LoggerServiceProvider extends ServiceProvider
@@ -43,6 +45,10 @@ class LoggerServiceProvider extends ServiceProvider
 
         $this->app->singleton(LogSerializerService::class, function ($app) {
             return new LogSerializerService;
+        });
+
+        $this->app->singleton(LogCleanerService::class, function ($app) {
+            return new LogCleanerService($app->make(LogPathService::class));
         });
 
         // Tasks
@@ -82,5 +88,19 @@ class LoggerServiceProvider extends ServiceProvider
         $this->publishes([
             __DIR__.'/../../config/logger.php' => config_path('logger.php'),
         ], 'logger-config');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                LoggerCleanCommand::class,
+            ]);
+        }
+
+        // Nettoyage automatique à la fin de la requête
+        $this->app->terminating(function () {
+            $cleaner = $this->app->make(LogCleanerService::class);
+            $config = $this->app->make(LoggerConfig::class);
+            $cutoffDate = date('Y-m-d', strtotime('-'.$config->retentionDays.' days'));
+            $cleaner->cleanWithCutoff($cutoffDate);
+        });
     }
 }

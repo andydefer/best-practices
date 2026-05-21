@@ -3,26 +3,6 @@
     "description": "Architecture standardisée pour Laravel : Records typés, Actions découplées, Collections type-safe et tests robustes",
     "type": "library",
     "license": "MIT",
-    "autoload": {
-        "psr-4": {
-            "AndyDefer\\BestPractices\\": "src/"
-        },
-        "files": [
-            "src/helpers.php"
-        ]
-    },
-    "autoload-dev": {
-        "psr-4": {
-            "AndyDefer\\BestPractices\\Tests\\": "tests/"
-        }
-    },
-    "extra": {
-        "laravel": {
-            "providers": [
-                "AndyDefer\\BestPractices\\BestPracticesServiceProvider"
-            ]
-        }
-    },
     "authors": [
         {
             "name": "Andy Defer",
@@ -36,6 +16,7 @@
     },
     "require-dev": {
         "barryvdh/laravel-ide-helper": "^3.6",
+        "composer/composer": "^2.0",
         "larastan/larastan": "^3.8",
         "laravel/pint": "^1.26",
         "orchestra/testbench": "^10.8",
@@ -43,5 +24,39 @@
         "rector/rector": "*",
         "symfony/var-dumper": "^7.0",
         "vimeo/psalm": "^6.14"
+    },
+    "autoload": {
+        "psr-4": {
+            "AndyDefer\\BestPractices\\": "src/"
+        },
+        "files": [
+            "src/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "AndyDefer\\BestPractices\\Tests\\": "tests/"
+        }
+    },
+    "bin": [
+        "bin/directive"
+    ],
+    "scripts": {
+        "post-install-cmd": [
+            "@php -r \"file_exists('directive') || copy('vendor/andydefer/best-practices/bin/directive', 'directive') && chmod('directive', 0755) && print('✓ Directive installed! Run: php directive --help\\n');\""
+        ],
+        "post-update-cmd": [
+            "@php -r \"file_exists('directive') || copy('vendor/andydefer/best-practices/bin/directive', 'directive') && chmod('directive', 0755);\""
+        ],
+        "post-uninstall-cmd": [
+            "@php -r \"if(file_exists('directive')) unlink('directive');\""
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "AndyDefer\\BestPractices\\BestPracticesServiceProvider"
+            ]
+        }
     }
 }

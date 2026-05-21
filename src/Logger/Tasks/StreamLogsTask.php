@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AndyDefer\BestPractices\Logger\Services\Tasks;
+namespace AndyDefer\BestPractices\Logger\Tasks;
 
 use AndyDefer\BestPractices\Collections\TypedRecords;
 use AndyDefer\BestPractices\Logger\Records\LogRecord;

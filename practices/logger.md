@@ -683,17 +683,13 @@ $logger->error(new LogDataRecord(type: 'payment', payload: $payload));
 
 ```php
 use AndyDefer\BestPractices\Records\AbstractRecord;
+use AndyDefer\BestPractices\Tests\Fixtures\Records\TestUserRecord;
 
-$userRecord = new class(1, 'John Doe', 'john@example.com') extends AbstractRecord {
-    public function __construct(
-        public readonly int $id,
-        public readonly string $name,
-        public readonly string $email,
-    ) {}
-    public function toArray(): array {
-        return ['id' => $this->id, 'name' => $this->name, 'email' => $this->email];
-    }
-};
+// Utilisation du Record de fixture existant
+$userRecord = new TestUserRecord(
+    name: 'John Doe',
+    email: 'john@example.com',
+);
 
 $payload = new MixedPayloadCollection();
 $payload->add('user_created', $userRecord, true);
@@ -784,200 +780,9 @@ final class UserServiceTest extends TestCase
     }
 }
 ```
-
-### 14.2 Test d'intégration complet
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace Tests\Feature\Logger;
-
-use AndyDefer\BestPractices\Logger\Config\LoggerConfig;
-use AndyDefer\BestPractices\Logger\Logger;
-use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
-use AndyDefer\BestPractices\Logger\Enums\LogLevel;
-use AndyDefer\BestPractices\Logger\Records\LogDataRecord;
-use AndyDefer\BestPractices\Logger\Records\LogQueryRecord;
-use AndyDefer\BestPractices\Logger\Services\LogPathService;
-use AndyDefer\BestPractices\Logger\Services\LogSerializerService;
-use AndyDefer\BestPractices\Logger\Services\Tasks\WriteLogTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\QueryLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\StreamLogsTask;
-use AndyDefer\BestPractices\Records\AbstractRecord;
-use AndyDefer\BestPractices\Tests\TestCase;
-
-final class LoggerIntegrationTest extends TestCase
-{
-    private Logger $logger;
-    private string $testLogPath;
-    
-    protected function setUp(): void
-    {
-        parent::setUp();
-        
-        $this->testLogPath = sys_get_temp_dir() . '/logger_test_' . uniqid();
-        $config = new LoggerConfig($this->testLogPath, 30);
-        $pathService = new LogPathService($config);
-        $serializer = new LogSerializerService();
-        
-        $writeTask = new WriteLogTask($pathService, $serializer);
-        $queryTask = new QueryLogsTask($pathService, $serializer);
-        $streamTask = new StreamLogsTask($pathService, $serializer);
-        
-        $this->logger = new Logger($writeTask, $queryTask, $streamTask);
-    }
-    
-    protected function tearDown(): void
-    {
-        if (is_dir($this->testLogPath)) {
-            $this->deleteDirectory($this->testLogPath);
-        }
-        parent::tearDown();
-    }
-    
-    public function test_complete_logging_workflow(): void
-    {
-        $payload1 = new MixedPayloadCollection();
-        $payload1->add('user_login', 1, '127.0.0.1');
-        
-        $payload2 = new MixedPayloadCollection();
-        $payload2->add('user_login', 2, '127.0.0.1');
-        
-        $payload3 = new MixedPayloadCollection();
-        $payload3->add('payment_failed', 123, 99.99);
-        
-        $this->logger->info(new LogDataRecord(type: 'user_login', payload: $payload1));
-        $this->logger->info(new LogDataRecord(type: 'user_login', payload: $payload2));
-        $this->logger->error(new LogDataRecord(type: 'payment_failed', payload: $payload3));
-        
-        $results = $this->logger->query(new LogQueryRecord(type: 'user_login'));
-        
-        $this->assertSame(2, $results->count());
-    }
-    
-    public function test_log_with_record_in_payload(): void
-    {
-        $userRecord = new class(1, 'John Doe') extends AbstractRecord {
-            public function __construct(
-                public readonly int $id,
-                public readonly string $name,
-            ) {}
-            public function toArray(): array {
-                return ['id' => $this->id, 'name' => $this->name];
-            }
-        };
-        
-        $payload = new MixedPayloadCollection();
-        $payload->add('user_created', $userRecord, true);
-        
-        $this->logger->info(new LogDataRecord(type: 'user', payload: $payload));
-        
-        $results = $this->logger->query(new LogQueryRecord(type: 'user'));
-        
-        $this->assertSame(1, $results->count());
-        
-        $log = $results->firstItem();
-        $this->assertSame('user_created', $log->data->payload->firstItem());
-        $this->assertIsObject($log->data->payload->toArray()[1]);
-        $this->assertEquals(1, $log->data->payload->toArray()[1]->id);
-    }
-    
-    public function test_query_by_date_range(): void
-    {
-        $payload = new MixedPayloadCollection();
-        $payload->add('test', 42);
-        
-        $this->logger->info(new LogDataRecord(type: 'test', payload: $payload));
-        
-        $results = $this->logger->query(new LogQueryRecord(
-            from: now()->subMinute()->toIso8601ZuluString(),
-            to: now()->addMinute()->toIso8601ZuluString(),
-        ));
-        
-        $this->assertSame(1, $results->count());
-    }
-    
-    public function test_multiple_log_levels(): void
-    {
-        $payloadDebug = new MixedPayloadCollection();
-        $payloadDebug->add('debug_msg');
-        
-        $payloadInfo = new MixedPayloadCollection();
-        $payloadInfo->add('info_msg');
-        
-        $payloadWarning = new MixedPayloadCollection();
-        $payloadWarning->add('warning_msg');
-        
-        $payloadError = new MixedPayloadCollection();
-        $payloadError->add('error_msg');
-        
-        $this->logger->debug(new LogDataRecord(type: 'test', payload: $payloadDebug));
-        $this->logger->info(new LogDataRecord(type: 'test', payload: $payloadInfo));
-        $this->logger->warning(new LogDataRecord(type: 'test', payload: $payloadWarning));
-        $this->logger->error(new LogDataRecord(type: 'test', payload: $payloadError));
-        
-        $debugResults = $this->logger->query(new LogQueryRecord(level: LogLevel::DEBUG));
-        $infoResults = $this->logger->query(new LogQueryRecord(level: LogLevel::INFO));
-        $warningResults = $this->logger->query(new LogQueryRecord(level: LogLevel::WARNING));
-        $errorResults = $this->logger->query(new LogQueryRecord(level: LogLevel::ERROR));
-        
-        $this->assertSame(1, $debugResults->count());
-        $this->assertSame(1, $infoResults->count());
-        $this->assertSame(1, $warningResults->count());
-        $this->assertSame(1, $errorResults->count());
-    }
-    
-    private function deleteDirectory(string $dir): void
-    {
-        if (!is_dir($dir)) {
-            return;
-        }
-        
-        $files = array_diff(scandir($dir), ['.', '..']);
-        foreach ($files as $file) {
-            $path = $dir . '/' . $file;
-            is_dir($path) ? $this->deleteDirectory($path) : unlink($path);
-        }
-        rmdir($dir);
-    }
-}
-```
-
 ---
 
-## 15. Structure du package
-
-```
-src/Logger/
-├── Enums/
-│   └── LogLevel.php
-├── Records/
-│   ├── LogRecord.php
-│   ├── LogQueryRecord.php
-│   └── LogDataRecord.php
-├── Collections/
-│   └── MixedPayloadCollection.php
-├── Contracts/
-│   └── LoggerInterface.php
-├── Config/
-│   └── LoggerConfig.php
-├── Providers/
-│   └── LoggerServiceProvider.php
-├── Services/
-│   ├── LogPathService.php
-│   ├── LogSerializerService.php
-│   └── Tasks/
-│       ├── WriteLogTask.php
-│       ├── QueryLogsTask.php
-│       └── StreamLogsTask.php
-└── Logger.php
-```
-
----
-
-## 16. Helpers autorisés (constantes uniquement)
+## 15. Helpers autorisés (constantes uniquement)
 
 ⚠️ **Les helpers sont autorisés UNIQUEMENT pour retourner des valeurs scalaires immuables**
 
@@ -1017,16 +822,16 @@ if (!function_exists('logger_retention_days')) {
 
 ---
 
-## 17. Gestion des erreurs
+## 16. Gestion des erreurs
 
-### 17.1 Exceptions
+### 16.1 Exceptions
 
 | Exception | Condition |
 |-----------|-----------|
 | `RuntimeException` | Impossible de créer le dossier ou d'écrire dans le fichier |
 | `InvalidArgumentException` | Type non autorisé dans le payload |
 
-### 17.2 Exemple de gestion
+### 16.2 Exemple de gestion
 
 ```php
 use RuntimeException;
@@ -1051,13 +856,13 @@ try {
 
 ---
 
-## 18. Enregistrement dans Laravel
+## 17. Enregistrement dans Laravel
 
-### 18.1 Via le package principal
+### 17.1 Via le package principal
 
 Le Service Provider du Logger est automatiquement enregistré par `BestPracticesServiceProvider`.
 
-### 18.2 Enregistrement manuel (optionnel)
+### 17.2 Enregistrement manuel (optionnel)
 
 ```php
 // config/app.php
@@ -1069,9 +874,9 @@ Le Service Provider du Logger est automatiquement enregistré par `BestPractices
 
 ---
 
-## 19. Bonnes pratiques
+## 18. Bonnes pratiques
 
-### 19.1 Structure du payload
+### 18.1 Structure du payload
 
 ```php
 // ✅ Premier élément = type d'événement
@@ -1081,7 +886,7 @@ $payload->add('user_login', $userId, $ip, $success);
 $payload->add($userId, 'user_login', $ip);
 ```
 
-### 19.2 Noms de type cohérents
+### 18.2 Noms de type cohérents
 
 ```php
 // ✅ snake_case
@@ -1093,7 +898,7 @@ $payload->add($userId, 'user_login', $ip);
 'type' => 'UserLogin'
 ```
 
-### 19.3 Versionnement par position
+### 18.3 Versionnement par position
 
 ```php
 // Version 1 : 3 éléments
@@ -1103,7 +908,7 @@ $payload->add('user_login', $userId, $ip);
 $payload->add('user_login', $userId, $ip, $userAgent);
 ```
 
-### 19.4 Chaînage
+### 18.4 Chaînage
 
 ```php
 // ✅ Chaînage fluide
@@ -1113,7 +918,7 @@ $payload->add('user_login')->add($userId)->add($ip)->add($success);
 $payload->add('user_login', $userId, $ip, $success);
 ```
 
-### 19.5 Injection de dépendance uniquement
+### 18.5 Injection de dépendance uniquement
 
 ```php
 // ✅ Injection explicite
@@ -1128,7 +933,7 @@ final class UserService
 logger()->info(...);
 ```
 
-### 19.6 Timestamp automatique
+### 18.6 Timestamp automatique
 
 ```php
 // ✅ Le timestamp est automatique
@@ -1140,7 +945,7 @@ $logger->info(now()->toIso8601ZuluString(), $logData);
 
 ---
 
-## 20. Règle d'or
+## 19. Règle d'or
 
 > **ZÉRO appel statique. TOUTES les dépendances injectées. Le payload ne contient que des scalaires, des Records, des TypedRecords ou des stdClass. Le timestamp est automatique.**
 

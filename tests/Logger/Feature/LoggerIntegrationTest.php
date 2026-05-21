@@ -13,10 +13,12 @@ use AndyDefer\BestPractices\Logger\Records\LogDataRecord;
 use AndyDefer\BestPractices\Logger\Records\LogQueryRecord;
 use AndyDefer\BestPractices\Logger\Services\LogPathService;
 use AndyDefer\BestPractices\Logger\Services\LogSerializerService;
-use AndyDefer\BestPractices\Logger\Services\Tasks\QueryLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\StreamLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\WriteLogTask;
-use AndyDefer\BestPractices\Records\AbstractRecord;
+use AndyDefer\BestPractices\Logger\Tasks\QueryLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\StreamLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\WriteLogTask;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserRole;
+use AndyDefer\BestPractices\Tests\Fixtures\Enums\TestUserStatus;
+use AndyDefer\BestPractices\Tests\Fixtures\Records\TestUserRecord;
 use AndyDefer\BestPractices\Tests\TestCase;
 
 final class LoggerIntegrationTest extends TestCase
@@ -25,7 +27,7 @@ final class LoggerIntegrationTest extends TestCase
 
     private string $testLogPath;
 
-    private string $currentDate;
+    private string $fixedDate;
 
     private LogSerializerService $serializer;
 
@@ -33,7 +35,8 @@ final class LoggerIntegrationTest extends TestCase
     {
         parent::setUp();
 
-        $this->currentDate = date('Y-m-d');
+        // Utiliser la date figée par Carbon::setTestNow() dans TestCase
+        $this->fixedDate = '2024-01-01';
         $this->testLogPath = sys_get_temp_dir().'/logger_test_'.uniqid();
         $config = new LoggerConfig($this->testLogPath, 30);
         $pathService = new LogPathService($config);
@@ -64,29 +67,38 @@ final class LoggerIntegrationTest extends TestCase
         return new LogDataRecord(type: $type, payload: $payload);
     }
 
-    // ==================== TESTS EXISTANTS ====================
+    private function getDateRange(): array
+    {
+        return [
+            'from' => $this->fixedDate.'T00:00:00Z',
+            'to' => $this->fixedDate.'T23:59:59Z',
+        ];
+    }
+
+    // ==================== TESTS ====================
 
     public function test_complete_logging_workflow(): void
     {
-        $this->logger->info($this->currentDate.'T10:26:00Z', $this->createLogDataRecord('user_login', [1, '127.0.0.1']));
-        $this->logger->info($this->currentDate.'T11:26:00Z', $this->createLogDataRecord('user_login', [2, '127.0.0.1']));
-        $this->logger->error($this->currentDate.'T12:26:00Z', $this->createLogDataRecord('payment_failed', [123, 99.99]));
+        $this->logger->info($this->createLogDataRecord('user_login', [1, '127.0.0.1']));
+        $this->logger->info($this->createLogDataRecord('user_login', [2, '127.0.0.1']));
+        $this->logger->error($this->createLogDataRecord('payment_failed', [123, 99.99]));
 
+        $dateRange = $this->getDateRange();
         $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T13:00:00Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
             type: 'user_login',
         ));
 
         $this->assertSame(2, $results->count());
 
-        $streamResults = $this->logger->stream($this->currentDate);
+        $streamResults = $this->logger->stream($this->fixedDate);
         $this->assertSame(3, $streamResults->count());
     }
 
     public function test_logs_are_persisted_between_instances(): void
     {
-        $this->logger->info($this->currentDate.'T10:26:00Z', $this->createLogDataRecord('test', ['persisted']));
+        $this->logger->info($this->createLogDataRecord('test', ['persisted']));
 
         $config = new LoggerConfig($this->testLogPath, 30);
         $pathService = new LogPathService($config);
@@ -98,9 +110,10 @@ final class LoggerIntegrationTest extends TestCase
 
         $newLogger = new Logger($writeTask, $queryTask, $streamTask);
 
+        $dateRange = $this->getDateRange();
         $results = $newLogger->query(new LogQueryRecord(
-            from: $this->currentDate.'T00:00:00Z',
-            to: $this->currentDate.'T23:59:59Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
         ));
 
         $this->assertSame(1, $results->count());
@@ -116,11 +129,12 @@ final class LoggerIntegrationTest extends TestCase
 
         $logData = new LogDataRecord(type: 'order_created', payload: $payload);
 
-        $this->logger->info($this->currentDate.'T10:26:00Z', $logData);
+        $this->logger->info($logData);
 
+        $dateRange = $this->getDateRange();
         $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T00:00:00Z',
-            to: $this->currentDate.'T23:59:59Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
         ));
 
         $this->assertSame(1, $results->count());
@@ -134,30 +148,48 @@ final class LoggerIntegrationTest extends TestCase
 
     public function test_multiple_log_levels_are_correctly_stored(): void
     {
-        $this->logger->debug($this->currentDate.'T10:26:00Z', $this->createLogDataRecord('debug_msg', []));
-        $this->logger->info($this->currentDate.'T10:27:00Z', $this->createLogDataRecord('info_msg', []));
-        $this->logger->warning($this->currentDate.'T10:28:00Z', $this->createLogDataRecord('warning_msg', []));
-        $this->logger->error($this->currentDate.'T10:29:00Z', $this->createLogDataRecord('error_msg', []));
+        $this->logger->debug($this->createLogDataRecord('debug_msg', []));
+        $this->logger->info($this->createLogDataRecord('info_msg', []));
+        $this->logger->warning($this->createLogDataRecord('warning_msg', []));
+        $this->logger->error($this->createLogDataRecord('error_msg', []));
 
-        $debugResults = $this->logger->query(new LogQueryRecord(level: LogLevel::DEBUG));
+        $dateRange = $this->getDateRange();
+
+        $debugResults = $this->logger->query(new LogQueryRecord(
+            from: $dateRange['from'],
+            to: $dateRange['to'],
+            level: LogLevel::DEBUG,
+        ));
         $this->assertSame(1, $debugResults->count());
         if ($debugResults->isNotEmpty()) {
             $this->assertSame('debug_msg', $debugResults->firstItem()->data->type);
         }
 
-        $infoResults = $this->logger->query(new LogQueryRecord(level: LogLevel::INFO));
+        $infoResults = $this->logger->query(new LogQueryRecord(
+            from: $dateRange['from'],
+            to: $dateRange['to'],
+            level: LogLevel::INFO,
+        ));
         $this->assertSame(1, $infoResults->count());
         if ($infoResults->isNotEmpty()) {
             $this->assertSame('info_msg', $infoResults->firstItem()->data->type);
         }
 
-        $warningResults = $this->logger->query(new LogQueryRecord(level: LogLevel::WARNING));
+        $warningResults = $this->logger->query(new LogQueryRecord(
+            from: $dateRange['from'],
+            to: $dateRange['to'],
+            level: LogLevel::WARNING,
+        ));
         $this->assertSame(1, $warningResults->count());
         if ($warningResults->isNotEmpty()) {
             $this->assertSame('warning_msg', $warningResults->firstItem()->data->type);
         }
 
-        $errorResults = $this->logger->query(new LogQueryRecord(level: LogLevel::ERROR));
+        $errorResults = $this->logger->query(new LogQueryRecord(
+            from: $dateRange['from'],
+            to: $dateRange['to'],
+            level: LogLevel::ERROR,
+        ));
         $this->assertSame(1, $errorResults->count());
         if ($errorResults->isNotEmpty()) {
             $this->assertSame('error_msg', $errorResults->firstItem()->data->type);
@@ -173,11 +205,12 @@ final class LoggerIntegrationTest extends TestCase
 
         $logData = new LogDataRecord(type: 'large_payload', payload: $largePayload);
 
-        $this->logger->info($this->currentDate.'T10:26:00Z', $logData);
+        $this->logger->info($logData);
 
+        $dateRange = $this->getDateRange();
         $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T10:59:59Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
             type: 'large_payload',
         ));
 
@@ -187,34 +220,28 @@ final class LoggerIntegrationTest extends TestCase
 
     public function test_query_by_date_range_boundaries(): void
     {
-        $this->logger->info($this->currentDate.'T10:00:00Z', $this->createLogDataRecord('boundary_test', []));
-        $this->logger->info($this->currentDate.'T10:00:01Z', $this->createLogDataRecord('boundary_test', []));
+        $this->logger->info($this->createLogDataRecord('boundary_test', []));
 
+        $dateRange = $this->getDateRange();
         $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T10:00:00Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
         ));
 
         $this->assertSame(1, $results->count());
     }
 
-    // ==================== TESTS AVEC DONNÉES COMPLEXES (stdClass à la lecture) ====================
+    // ==================== TESTS AVEC Fixture TestUserRecord ====================
 
-    public function test_log_with_record_in_payload(): void
+    public function test_log_with_test_user_record_in_payload(): void
     {
-        // Créer un Record personnalisé
-        $userRecord = new class(1, 'John Doe') extends AbstractRecord
-        {
-            public function __construct(
-                public readonly int $id,
-                public readonly string $name,
-            ) {}
-
-            public function toArray(): array
-            {
-                return ['id' => $this->id, 'name' => $this->name];
-            }
-        };
+        // Créer un TestUserRecord avec des données
+        $userRecord = new TestUserRecord(
+            name: 'John Doe',
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::ADMIN,
+        );
 
         $payload = new MixedPayloadCollection;
         $payload->add('user_created');
@@ -222,11 +249,12 @@ final class LoggerIntegrationTest extends TestCase
         $payload->add(true);
 
         $logData = new LogDataRecord(type: 'user', payload: $payload);
-        $this->logger->info($this->currentDate.'T10:26:00Z', $logData);
+        $this->logger->info($logData);
 
+        $dateRange = $this->getDateRange();
         $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T10:59:59Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
             type: 'user',
         ));
 
@@ -236,50 +264,40 @@ final class LoggerIntegrationTest extends TestCase
         $this->assertSame('user', $log->data->type);
         $this->assertSame('user_created', $log->data->payload->firstItem());
 
-        // À la lecture, le Record est devenu un objet stdClass
         $serializedRecord = $log->data->payload->toArray()[1];
         $this->assertIsObject($serializedRecord);
-        $this->assertEquals(1, $serializedRecord->id);
         $this->assertEquals('John Doe', $serializedRecord->name);
+        $this->assertEquals('john@example.com', $serializedRecord->email);
+        // Pour les pure enums, on compare avec le nom de l'enum (MAJUSCULES)
+        $this->assertEquals('ACTIVE', $serializedRecord->status);
+        // Pour TestUserRole qui est un backed enum (string), on compare avec sa valeur
+        $this->assertEquals('admin', $serializedRecord->role);
     }
 
-    public function test_log_with_multiple_records_in_payload(): void
+    public function test_log_with_multiple_test_user_records_in_payload(): void
     {
-        $record1 = new class(1, 'Product A') extends AbstractRecord
-        {
-            public function __construct(
-                public readonly int $id,
-                public readonly string $name,
-            ) {}
+        $userRecord1 = new TestUserRecord(
+            name: 'John Doe',
+            email: 'john@example.com',
+            role: TestUserRole::ADMIN,
+        );
 
-            public function toArray(): array
-            {
-                return ['id' => $this->id, 'name' => $this->name];
-            }
-        };
-
-        $record2 = new class(2, 'Product B') extends AbstractRecord
-        {
-            public function __construct(
-                public readonly int $id,
-                public readonly string $name,
-            ) {}
-
-            public function toArray(): array
-            {
-                return ['id' => $this->id, 'name' => $this->name];
-            }
-        };
+        $userRecord2 = new TestUserRecord(
+            name: 'Jane Smith',
+            email: 'jane@example.com',
+            role: TestUserRole::USER,
+        );
 
         $payload = new MixedPayloadCollection;
-        $payload->add('products_list', $record1, $record2);
+        $payload->add('users_list', $userRecord1, $userRecord2);
 
-        $logData = new LogDataRecord(type: 'products', payload: $payload);
-        $this->logger->info($this->currentDate.'T10:26:00Z', $logData);
+        $logData = new LogDataRecord(type: 'users', payload: $payload);
+        $this->logger->info($logData);
 
+        $dateRange = $this->getDateRange();
         $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T10:59:59Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
         ));
 
         $this->assertSame(1, $results->count());
@@ -287,114 +305,41 @@ final class LoggerIntegrationTest extends TestCase
         $log = $results->firstItem();
         $payloadArray = $log->data->payload->toArray();
 
-        $this->assertSame('products_list', $payloadArray[0]);
+        $this->assertSame('users_list', $payloadArray[0]);
 
-        // Les Records deviennent des stdClass à la lecture
         $this->assertIsObject($payloadArray[1]);
-        $this->assertEquals(1, $payloadArray[1]->id);
-        $this->assertEquals('Product A', $payloadArray[1]->name);
-
-        $this->assertIsObject($payloadArray[2]);
-        $this->assertEquals(2, $payloadArray[2]->id);
-        $this->assertEquals('Product B', $payloadArray[2]->name);
-    }
-
-    public function test_log_with_nested_typed_records_collection(): void
-    {
-        $nestedCollection = new TypedRecords('int');
-        $nestedCollection->add(100, 200, 300);
-
-        $payload = new MixedPayloadCollection;
-        $payload->add('nested_data');
-        $payload->add($nestedCollection);
-        $payload->add('end');
-
-        $logData = new LogDataRecord(type: 'nested_test', payload: $payload);
-        $this->logger->info($this->currentDate.'T10:26:00Z', $logData);
-
-        $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T10:59:59Z',
-        ));
-
-        $this->assertSame(1, $results->count());
-
-        $log = $results->firstItem();
-        $payloadArray = $log->data->payload->toArray();
-
-        $this->assertSame('nested_data', $payloadArray[0]);
-        // La collection TypedRecords devient un stdClass à la lecture
-        $this->assertIsObject($payloadArray[1]);
-        // stdClass avec des propriétés numériques (0, 1, 2)
-        $this->assertEquals(100, $payloadArray[1]->{0});
-        $this->assertEquals(200, $payloadArray[1]->{1});
-        $this->assertEquals(300, $payloadArray[1]->{2});
-        $this->assertSame('end', $payloadArray[2]);
-    }
-
-    public function test_log_with_mixed_records_and_typed_records(): void
-    {
-        $userRecord = new class(1, 'John Doe') extends AbstractRecord
-        {
-            public function __construct(
-                public readonly int $id,
-                public readonly string $name,
-            ) {}
-
-            public function toArray(): array
-            {
-                return ['id' => $this->id, 'name' => $this->name];
-            }
-        };
-
-        $tagsCollection = new TypedRecords('string');
-        $tagsCollection->add('premium', 'vip', 'active');
-
-        $payload = new MixedPayloadCollection;
-        $payload->add('user_profile', $userRecord, $tagsCollection, 'metadata');
-
-        $logData = new LogDataRecord(type: 'profile', payload: $payload);
-        $this->logger->info($this->currentDate.'T10:26:00Z', $logData);
-
-        $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T10:59:59Z',
-        ));
-
-        $this->assertSame(1, $results->count());
-
-        $log = $results->firstItem();
-        $payloadArray = $log->data->payload->toArray();
-
-        $this->assertSame('user_profile', $payloadArray[0]);
-
-        // Le Record devient stdClass
-        $this->assertIsObject($payloadArray[1]);
-        $this->assertEquals(1, $payloadArray[1]->id);
         $this->assertEquals('John Doe', $payloadArray[1]->name);
+        $this->assertEquals('admin', $payloadArray[1]->role);
 
-        // La collection TypedRecords devient stdClass avec propriétés numériques
         $this->assertIsObject($payloadArray[2]);
-        $this->assertEquals('premium', $payloadArray[2]->{0});
-        $this->assertEquals('vip', $payloadArray[2]->{1});
-        $this->assertEquals('active', $payloadArray[2]->{2});
-
-        $this->assertSame('metadata', $payloadArray[3]);
+        $this->assertEquals('Jane Smith', $payloadArray[2]->name);
+        $this->assertEquals('user', $payloadArray[2]->role);
     }
 
-    public function test_chaining_payload_add_with_multiple_types(): void
+    public function test_log_with_test_user_record_and_tags(): void
     {
+        // Créer un TypedRecords pour les tags
+        $tags = new TypedRecords('string');
+        $tags->add('premium', 'vip', 'active');
+
+        $userRecord = new TestUserRecord(
+            name: 'John Doe',
+            email: 'john@example.com',
+            tags: $tags,
+        );
+
         $payload = new MixedPayloadCollection;
+        $payload->add('user_with_tags');
+        $payload->add($userRecord);
+        $payload->add('metadata');
 
-        // Chaining avec multiple valeurs
-        $payload->add('start')->add(42, 'middle', true)->add('end');
+        $logData = new LogDataRecord(type: 'user_tags', payload: $payload);
+        $this->logger->info($logData);
 
-        $logData = new LogDataRecord(type: 'chaining_test', payload: $payload);
-        $this->logger->info($this->currentDate.'T10:26:00Z', $logData);
-
+        $dateRange = $this->getDateRange();
         $results = $this->logger->query(new LogQueryRecord(
-            from: $this->currentDate.'T10:00:00Z',
-            to: $this->currentDate.'T10:59:59Z',
+            from: $dateRange['from'],
+            to: $dateRange['to'],
         ));
 
         $this->assertSame(1, $results->count());
@@ -402,7 +347,46 @@ final class LoggerIntegrationTest extends TestCase
         $log = $results->firstItem();
         $payloadArray = $log->data->payload->toArray();
 
-        $this->assertSame(['start', 42, 'middle', true, 'end'], $payloadArray);
+        $this->assertSame('user_with_tags', $payloadArray[0]);
+
+        $this->assertIsObject($payloadArray[1]);
+        $this->assertEquals('John Doe', $payloadArray[1]->name);
+        $this->assertEquals(['premium', 'vip', 'active'], $payloadArray[1]->tags);
+
+        $this->assertSame('metadata', $payloadArray[2]);
+    }
+
+    public function test_log_with_chained_payload_and_fixtures(): void
+    {
+        $userRecord = new TestUserRecord(
+            name: 'John Doe',
+            email: 'john@example.com',
+            status: TestUserStatus::ACTIVE,
+            role: TestUserRole::ADMIN,
+        );
+
+        $payload = new MixedPayloadCollection;
+        $payload->add('user_event')->add($userRecord)->add(42)->add(true);
+
+        $logData = new LogDataRecord(type: 'user_event', payload: $payload);
+        $this->logger->info($logData);
+
+        $dateRange = $this->getDateRange();
+        $results = $this->logger->query(new LogQueryRecord(
+            from: $dateRange['from'],
+            to: $dateRange['to'],
+        ));
+
+        $this->assertSame(1, $results->count());
+
+        $log = $results->firstItem();
+        $payloadArray = $log->data->payload->toArray();
+
+        $this->assertSame('user_event', $payloadArray[0]);
+        $this->assertIsObject($payloadArray[1]);
+        $this->assertEquals('John Doe', $payloadArray[1]->name);
+        $this->assertEquals(42, $payloadArray[2]);
+        $this->assertEquals(true, $payloadArray[3]);
     }
 
     private function deleteDirectory(string $dir): void

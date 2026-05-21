@@ -9,27 +9,77 @@ use AndyDefer\BestPractices\Logger\Contracts\LoggerInterface;
 use AndyDefer\BestPractices\Logger\Enums\LogLevel;
 use AndyDefer\BestPractices\Logger\Records\LogQueryRecord;
 use AndyDefer\BestPractices\Logger\Records\LogRecord;
-use AndyDefer\BestPractices\Logger\Services\Tasks\QueryLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\StreamLogsTask;
-use AndyDefer\BestPractices\Logger\Services\Tasks\WriteLogTask;
+use AndyDefer\BestPractices\Logger\Services\LogBufferService;
+use AndyDefer\BestPractices\Logger\Tasks\QueryLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\StreamLogsTask;
+use AndyDefer\BestPractices\Logger\Tasks\WriteLogTask;
 use AndyDefer\BestPractices\Records\Recordable;
 
 final class Logger implements LoggerInterface
 {
+    private ?LogBufferService $buffer = null;
+
+    private bool $useBuffer = false;
+
     public function __construct(
         private readonly WriteLogTask $writeLogTask,
         private readonly QueryLogsTask $queryLogsTask,
         private readonly StreamLogsTask $streamLogsTask,
     ) {}
 
+    public function enableBuffer(int $size = 100): self
+    {
+        $this->useBuffer = true;
+        $this->buffer = new LogBufferService($this->writeLogTask, $size);
+
+        return $this;
+    }
+
+    public function disableBuffer(): self
+    {
+        if ($this->buffer !== null) {
+            $this->buffer->flush();
+        }
+        $this->useBuffer = false;
+        $this->buffer = null;
+
+        return $this;
+    }
+
+    public function flush(): void
+    {
+        if ($this->buffer !== null) {
+            $this->buffer->flush();
+        }
+    }
+
+    public function isBufferEnabled(): bool
+    {
+        return $this->useBuffer;
+    }
+
+    public function getBufferSize(): int
+    {
+        return $this->buffer?->getBufferSize() ?? 0;
+    }
+
+    private function write(LogRecord $record): void
+    {
+        if ($this->useBuffer && $this->buffer !== null) {
+            $this->buffer->push($record);
+        } else {
+            $this->writeLogTask->execute($record);
+        }
+    }
+
     public function log(LogRecord $record): void
     {
-        $this->writeLogTask->execute($record);
+        $this->write($record);
     }
 
     public function info(Recordable $data): void
     {
-        $this->log(new LogRecord(
+        $this->write(new LogRecord(
             time: now()->toIso8601ZuluString(),
             level: LogLevel::INFO,
             data: $data,
@@ -38,7 +88,7 @@ final class Logger implements LoggerInterface
 
     public function warning(Recordable $data): void
     {
-        $this->log(new LogRecord(
+        $this->write(new LogRecord(
             time: now()->toIso8601ZuluString(),
             level: LogLevel::WARNING,
             data: $data,
@@ -47,7 +97,7 @@ final class Logger implements LoggerInterface
 
     public function error(Recordable $data): void
     {
-        $this->log(new LogRecord(
+        $this->write(new LogRecord(
             time: now()->toIso8601ZuluString(),
             level: LogLevel::ERROR,
             data: $data,
@@ -56,7 +106,7 @@ final class Logger implements LoggerInterface
 
     public function debug(Recordable $data): void
     {
-        $this->log(new LogRecord(
+        $this->write(new LogRecord(
             time: now()->toIso8601ZuluString(),
             level: LogLevel::DEBUG,
             data: $data,
@@ -65,11 +115,20 @@ final class Logger implements LoggerInterface
 
     public function query(LogQueryRecord $query): TypedRecords
     {
+        // Vider le buffer avant query pour cohérence
+        if ($this->buffer !== null) {
+            $this->buffer->flush();
+        }
+
         return $this->queryLogsTask->execute($query);
     }
 
     public function stream(?string $date = null): TypedRecords
     {
+        if ($this->buffer !== null) {
+            $this->buffer->flush();
+        }
+
         return $this->streamLogsTask->execute($date);
     }
 }

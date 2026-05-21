@@ -6,6 +6,7 @@ namespace AndyDefer\BestPractices\Tests\Logger\Unit\Services;
 
 use AndyDefer\BestPractices\Collections\TypedRecords;
 use AndyDefer\BestPractices\Logger\Config\LoggerConfig;
+use AndyDefer\BestPractices\Logger\Logger;
 use AndyDefer\BestPractices\Logger\Services\LogPathService;
 use AndyDefer\BestPractices\Tests\TestCase;
 
@@ -13,14 +14,18 @@ final class LogPathServiceTest extends TestCase
 {
     private LogPathService $service;
 
+    private Logger $logger;
+
     private string $testBasePath;
 
     private string $currentDate;
 
     protected function setUp(): void
     {
+
         parent::setUp();
         $this->currentDate = date('Y-m-d');
+        $this->logger = app(Logger::class);
         $this->testBasePath = '/tmp/test_logs_'.uniqid();
         $config = new LoggerConfig($this->testBasePath, 30);
         $this->service = new LogPathService($config);

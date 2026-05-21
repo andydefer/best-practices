@@ -1,0 +1,85 @@
+#!/usr/bin/env php
+<?php
+
+// bin/directive
+declare(strict_types=1);
+
+// Trouver l'autoloader
+$autoloadPaths = [
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../vendor/autoload.php',
+    __DIR__ . '/vendor/autoload.php',
+    getcwd() . '/vendor/autoload.php',
+];
+
+$autoloadFound = false;
+foreach ($autoloadPaths as $path) {
+    if (file_exists($path)) {
+        require_once $path;
+        $autoloadFound = true;
+        break;
+    }
+}
+
+if (!$autoloadFound) {
+    fwrite(STDERR, "ERROR: Autoloader not found. Run 'composer install' first.\n");
+    exit(1);
+}
+
+use AndyDefer\BestPractices\Collections\TypedRecords;
+use AndyDefer\BestPractices\Directive\Config\DirectiveConfig;
+use AndyDefer\BestPractices\Directive\DirectiveKernel;
+use AndyDefer\BestPractices\Directive\Factories\ContainerDirectiveFactory;
+use AndyDefer\BestPractices\Directive\Records\DirectiveExecutionRecord;
+use AndyDefer\BestPractices\Directive\Services\DirectiveDiscoveryService;
+use AndyDefer\BestPractices\Directive\Services\DirectiveExecutionService;
+use AndyDefer\BestPractices\Directive\Services\DirectiveHydratorService;
+use AndyDefer\BestPractices\Directive\Services\DirectiveParserService;
+use AndyDefer\BestPractices\Directive\Services\DirectiveRendererService;
+use AndyDefer\BestPractices\Directive\Tasks\AskQuestionTask;
+use AndyDefer\BestPractices\Directive\Tasks\ConfirmQuestionTask;
+use AndyDefer\BestPractices\Directive\Tasks\DisplayErrorTask;
+use AndyDefer\BestPractices\Directive\Tasks\DisplayMessageTask;
+use AndyDefer\BestPractices\Directive\Tasks\DisplayTableTask;
+use Illuminate\Container\Container;
+
+$container = new Container();
+
+$container->singleton(DisplayMessageTask::class);
+$container->singleton(AskQuestionTask::class);
+$container->singleton(ConfirmQuestionTask::class);
+$container->singleton(DisplayTableTask::class);
+$container->singleton(DisplayErrorTask::class);
+
+$projectRoot = getcwd();
+$directivesPath = $projectRoot . '/app/Directives';
+
+if (file_exists($projectRoot . '/config/directive.php')) {
+    $config = require $projectRoot . '/config/directive.php';
+    $directivesPath = $config['path'] ?? $directivesPath;
+}
+
+$directiveConfig = DirectiveConfig::default()->withDirectivesPath($directivesPath);
+
+$factory = new ContainerDirectiveFactory($container);
+$parser = new DirectiveParserService();
+$hydrator = new DirectiveHydratorService($factory);
+$discovery = new DirectiveDiscoveryService($directiveConfig, $hydrator);
+$renderer = new DirectiveRendererService();
+$displayMessage = $container->make(DisplayMessageTask::class);
+$displayError = $container->make(DisplayErrorTask::class);
+
+$executionService = new DirectiveExecutionService(
+    $discovery,
+    $parser,
+    $hydrator,
+    $renderer,
+    $displayMessage,
+    $displayError,
+    null,
+);
+
+$kernel = new DirectiveKernel($executionService);
+$exitCode = $kernel->run($argv);
+
+exit($exitCode->value);

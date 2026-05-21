@@ -7,6 +7,8 @@ namespace AndyDefer\BestPractices\Tests\Logger\Unit\Collections;
 use AndyDefer\BestPractices\Collections\TypedRecords;
 use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
 use AndyDefer\BestPractices\Records\AbstractRecord;
+use AndyDefer\BestPractices\Tests\Fixtures\Records\TestProductRecord;
+use AndyDefer\BestPractices\Tests\Fixtures\Records\TestUserRecord;
 use AndyDefer\BestPractices\Tests\TestCase;
 
 final class MixedPayloadCollectionTest extends TestCase
@@ -39,10 +41,10 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $testRecord = new class('test') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
+        $testRecord = new TestUserRecord(
+            name: 'Test User',
+            email: 'test@example.com',
+        );
 
         $collection->add($testRecord);
 
@@ -55,15 +57,8 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $record1 = new class('record1') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
-
-        $record2 = new class('record2') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
+        $record1 = new TestUserRecord(name: 'User 1', email: 'user1@example.com');
+        $record2 = new TestUserRecord(name: 'User 2', email: 'user2@example.com');
 
         $collection->add($record1, $record2);
 
@@ -88,10 +83,7 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $testRecord = new class('test') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
+        $testRecord = new TestUserRecord(name: 'Test User', email: 'test@example.com');
 
         $collection->add(1, 'string', $testRecord, true);
 
@@ -104,15 +96,7 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $testRecord = new class('test') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-
-            public function toArray(): array
-            {
-                return ['name' => $this->name];
-            }
-        };
+        $testRecord = new TestUserRecord(name: 'Test User', email: 'test@example.com');
 
         $collection->add(1, 'hello', $testRecord);
 
@@ -120,7 +104,8 @@ final class MixedPayloadCollectionTest extends TestCase
 
         $this->assertSame(1, $serialized[0]);
         $this->assertSame('hello', $serialized[1]);
-        $this->assertSame(['name' => 'test'], $serialized[2]);
+        $this->assertSame('Test User', $serialized[2]['name']);
+        $this->assertSame('test@example.com', $serialized[2]['email']);
     }
 
     public function test_to_serializable_array_handles_nested_typed_records(): void
@@ -149,10 +134,7 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $testRecord = new class('test') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
+        $testRecord = new TestUserRecord(name: 'Test User', email: 'test@example.com');
 
         $collection->add(1, $testRecord);
 
@@ -163,15 +145,8 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $record1 = new class('record1') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
-
-        $record2 = new class('record2') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
+        $record1 = new TestUserRecord(name: 'User 1', email: 'user1@example.com');
+        $record2 = new TestUserRecord(name: 'User 2', email: 'user2@example.com');
 
         $collection->add($record1, $record2);
 
@@ -182,10 +157,7 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $testRecord = new class('test') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
+        $testRecord = new TestUserRecord(name: 'Test User', email: 'test@example.com');
 
         $collection->add($testRecord, 1);
 
@@ -216,10 +188,7 @@ final class MixedPayloadCollectionTest extends TestCase
     {
         $collection = new MixedPayloadCollection;
 
-        $testRecord = new class('test') extends AbstractRecord
-        {
-            public function __construct(public readonly string $name) {}
-        };
+        $testRecord = new TestUserRecord(name: 'Test User', email: 'test@example.com');
 
         $collection->add('type', $testRecord, 42, true);
 
@@ -236,9 +205,7 @@ final class MixedPayloadCollectionTest extends TestCase
         $collection->add('prefix', $nested, 'suffix');
 
         $this->assertSame(3, $collection->count());
-        // La dernière valeur est 'suffix' (string), pas le nested
         $this->assertSame('suffix', $collection->lastItem());
-        // La deuxième valeur est le nested
         $this->assertSame($nested, $collection->toArray()[1]);
     }
 
@@ -258,5 +225,34 @@ final class MixedPayloadCollectionTest extends TestCase
         $this->assertSame($nested1, $collection->toArray()[0]);
         $this->assertSame($nested2, $collection->toArray()[1]);
         $this->assertSame('end', $collection->toArray()[2]);
+    }
+
+    public function test_add_accepts_product_record(): void
+    {
+        $collection = new MixedPayloadCollection;
+
+        $product = new TestProductRecord(
+            name: 'Laptop',
+            price: 999,
+        );
+
+        $collection->add($product);
+
+        $this->assertSame(1, $collection->count());
+        $this->assertTrue($collection->isAllRecords());
+        $this->assertSame('Laptop', $collection->firstItem()->name);
+    }
+
+    public function test_add_accepts_multiple_different_record_types(): void
+    {
+        $collection = new MixedPayloadCollection;
+
+        $user = new TestUserRecord(name: 'John Doe', email: 'john@example.com');
+        $product = new TestProductRecord(name: 'Laptop', price: 999);
+
+        $collection->add($user, $product);
+
+        $this->assertSame(2, $collection->count());
+        $this->assertTrue($collection->isAllRecords());
     }
 }

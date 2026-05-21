@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace AndyDefer\BestPractices\Logger\Services\Tasks;
+namespace AndyDefer\BestPractices\Logger\Tasks;
 
 use AndyDefer\BestPractices\Logger\Records\LogRecord;
 use AndyDefer\BestPractices\Logger\Services\LogPathService;
@@ -29,10 +29,27 @@ class WriteLogTask
 
         $jsonLine = $this->serializer->serialize($record);
 
-        $result = file_put_contents($filePath, $jsonLine, FILE_APPEND | LOCK_EX);
-
-        if ($result === false) {
-            throw new RuntimeException("Cannot write log to file: {$filePath}");
+        // Écriture avec verrouillage pour concurrence
+        $handle = fopen($filePath, 'a');
+        if ($handle === false) {
+            throw new RuntimeException("Cannot open log file: {$filePath}");
         }
+
+        if (flock($handle, LOCK_EX)) {
+            fwrite($handle, $jsonLine);
+            fflush($handle);
+            flock($handle, LOCK_UN);
+        }
+        fclose($handle);
+    }
+
+    public function getFilePath(string $timestamp): string
+    {
+        return $this->pathService->getHourlyFilePath($timestamp);
+    }
+
+    public function serialize(LogRecord $record): string
+    {
+        return $this->serializer->serialize($record);
     }
 }
