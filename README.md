@@ -38,7 +38,7 @@ Ce package contient la documentation exhaustive des conventions, bonnes pratique
 | Document | Description |
 |----------|-------------|
 | [practices/repositories.md](./practices/repositories.md) | Interface unique d'accès aux données. **⚠️ Tests UNIQUEMENT en intégration (pas de tests unitaires). Les méthodes héritées d'`AbstractRepository` sont DÉJÀ testées par le package** |
-| [practices/models.md](./practices/models.md) | Modèles anémiques (déclarations uniquement, aucune logique métier) |
+| [practices/models.md](./practices/models.md) | Modèles anémiques (déclarations uniquement, aucune logique métier complexe) |
 | [practices/casts.md](./practices/casts.md) | Casts personnalisés pour les attributs des modèles |
 | [practices/migrations.md](./practices/migrations.md) | Structure des migrations et conventions de nommage |
 | [practices/seeders.md](./practices/seeders.md) | Données réalistes sans factories Laravel |
