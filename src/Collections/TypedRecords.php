@@ -8,6 +8,7 @@ use AndyDefer\BestPractices\Records\AbstractRecord;
 use AndyDefer\BestPractices\Traits\Records\ArrayableCollectionTrait;
 use Closure;
 use InvalidArgumentException;
+use stdClass;
 use UnitEnum;
 
 /**
@@ -40,6 +41,7 @@ class TypedRecords implements TypedRecordsInterface
         'string' => 'string',
         'boolean' => 'bool',
         'NULL' => 'null',
+        'object' => 'object',
     ];
 
     /**
@@ -107,28 +109,38 @@ class TypedRecords implements TypedRecordsInterface
      */
     private function validateSingleType(string $type): void
     {
+        // Types scalaires autorisés
         if (in_array($type, self::getScalarTypes(), true)) {
             return;
         }
 
+        // TypedRecords imbriqué
         if ($type === self::class) {
             return;
         }
 
+        // AbstractRecord et ses descendants
         if ($type === AbstractRecord::class) {
             return;
         }
 
+        // stdClass uniquement - pas d'autres objets !
+        if ($type === stdClass::class) {
+            return;
+        }
+
+        // Vérification pour les classes Record
         if (! class_exists($type)) {
             throw new InvalidArgumentException(sprintf('Type "%s" is not a valid class', $type));
         }
 
         if (! is_subclass_of($type, AbstractRecord::class)) {
             throw new InvalidArgumentException(sprintf(
-                'Type "%s" must extend %s or be %s',
+                'Type "%s" must extend %s, be %s, be %s, or be a scalar (int, float, string, bool, null)',
                 $type,
                 AbstractRecord::class,
-                self::class
+                self::class,
+                stdClass::class
             ));
         }
     }
@@ -141,14 +153,22 @@ class TypedRecords implements TypedRecordsInterface
         $valueType = self::normalizeType(gettype($value));
 
         foreach ($this->allowedTypes as $allowedType) {
+            // Correspondance par type scalaire
             if ($valueType === $allowedType) {
                 return true;
             }
 
+            // Correspondance pour TypedRecords imbriqué
             if ($allowedType === self::class && $value instanceof self) {
                 return true;
             }
 
+            // Correspondance pour stdClass UNIQUEMENT
+            if ($allowedType === stdClass::class && $value instanceof stdClass) {
+                return true;
+            }
+
+            // Correspondance pour les Records
             if ($value instanceof $allowedType) {
                 return true;
             }
@@ -170,6 +190,14 @@ class TypedRecords implements TypedRecordsInterface
             return $value::class;
         }
 
+        if ($value instanceof stdClass) {
+            return stdClass::class;
+        }
+
+        if (is_object($value)) {
+            return 'object('.$value::class.')';
+        }
+
         return self::normalizeType(gettype($value));
     }
 
@@ -182,9 +210,18 @@ class TypedRecords implements TypedRecordsInterface
      */
     private function validateItem(mixed $item): void
     {
+        // Interdiction formelle des Enums
         if ($item instanceof UnitEnum) {
             throw new InvalidArgumentException(sprintf(
                 'Enum %s is not allowed in TypedRecords. Use its scalar value instead.',
+                $item::class
+            ));
+        }
+
+        // Interdiction des objets qui ne sont pas stdClass
+        if (is_object($item) && ! ($item instanceof stdClass) && ! ($item instanceof AbstractRecord) && ! ($item instanceof self)) {
+            throw new InvalidArgumentException(sprintf(
+                'Object of type "%s" is not allowed in TypedRecords. Only stdClass, AbstractRecord, and TypedRecords are allowed.',
                 $item::class
             ));
         }
@@ -214,7 +251,7 @@ class TypedRecords implements TypedRecordsInterface
      *
      * @return TypedRecords<TValue>
      */
-    final public function add(int|string|float|bool|null|AbstractRecord|TypedRecords ...$items): static
+    final public function add(int|string|float|bool|null|AbstractRecord|TypedRecords|stdClass ...$items): static
     {
         foreach ($items as $item) {
             $this->validateItem($item);
@@ -256,7 +293,6 @@ class TypedRecords implements TypedRecordsInterface
      */
     final public function getAllowedTypes(): array
     {
-
         return $this->allowedTypes;
     }
 
@@ -295,18 +331,19 @@ class TypedRecords implements TypedRecordsInterface
         $returnType = match (true) {
             $firstResult instanceof self => self::class,
             $firstResult instanceof AbstractRecord => $firstResult::class,
+            $firstResult instanceof stdClass => stdClass::class,
             is_int($firstResult) => 'int',
             is_float($firstResult) => 'float',
             is_string($firstResult) => 'string',
             is_bool($firstResult) => 'bool',
             $firstResult === null => 'null',
-            default => throw new InvalidArgumentException('Map callback must return a scalar, Record, or TypedRecords'),
+            default => throw new InvalidArgumentException('Map callback must return a scalar, Record, TypedRecords, or stdClass'),
         };
 
         $result = new static($returnType);
 
         foreach ($mappedItems as $item) {
-            /** @var int|string|float|bool|null|AbstractRecord|TypedRecords $item */
+            /** @var int|string|float|bool|null|AbstractRecord|TypedRecords|stdClass $item */
             $result->add($item);
         }
 
@@ -335,7 +372,7 @@ class TypedRecords implements TypedRecordsInterface
         return $this;
     }
 
-    final public function firstItem(): null|int|string|float|bool|AbstractRecord|TypedRecords
+    final public function firstItem(): null|int|string|float|bool|AbstractRecord|TypedRecords|stdClass
     {
         return $this->items[0] ?? null;
     }
@@ -352,7 +389,7 @@ class TypedRecords implements TypedRecordsInterface
         return $result;
     }
 
-    final public function lastItem(): null|int|string|float|bool|AbstractRecord|TypedRecords
+    final public function lastItem(): null|int|string|float|bool|AbstractRecord|TypedRecords|stdClass
     {
         return empty($this->items) ? null : $this->items[array_key_last($this->items)];
     }
@@ -458,7 +495,7 @@ class TypedRecords implements TypedRecordsInterface
         return empty($values) ? null : min($values);
     }
 
-    final public function contains(int|string|float|bool|null|AbstractRecord|TypedRecords $value): bool
+    final public function contains(int|string|float|bool|null|AbstractRecord|TypedRecords|stdClass $value): bool
     {
         return in_array($value, $this->items, true);
     }
@@ -534,7 +571,15 @@ class TypedRecords implements TypedRecordsInterface
 
     final public function scalars(): static
     {
-        $result = new static(...self::getScalarTypes());
+        $scalarTypes = self::getScalarTypes();
+
+        $allowedScalarTypes = array_intersect($this->allowedTypes, $scalarTypes);
+
+        if (empty($allowedScalarTypes)) {
+            $result = new static(...$scalarTypes);
+        } else {
+            $result = new static(...$allowedScalarTypes);
+        }
 
         foreach ($this->items as $item) {
             if ($this->isScalarValue($item)) {
@@ -567,12 +612,12 @@ class TypedRecords implements TypedRecordsInterface
         return $this->records();
     }
 
-    final public function where(string $property, int|string|float|bool|null|AbstractRecord|TypedRecords $value): static
+    final public function where(string $property, int|string|float|bool|null|AbstractRecord|TypedRecords|stdClass $value): static
     {
         $result = new static(...$this->allowedTypes);
 
         foreach ($this->items as $item) {
-            if ($item instanceof AbstractRecord && property_exists($item, $property) && $item->{$property} === $value) {
+            if (is_object($item) && property_exists($item, $property) && $item->{$property} === $value) {
                 $result->add($item);
             }
         }
@@ -585,7 +630,7 @@ class TypedRecords implements TypedRecordsInterface
         $result = new static(...$this->allowedTypes);
 
         foreach ($this->items as $item) {
-            if ($item instanceof AbstractRecord && property_exists($item, $property) && $item->{$property} !== null) {
+            if (is_object($item) && property_exists($item, $property) && $item->{$property} !== null) {
                 $result->add($item);
             }
         }
@@ -598,7 +643,7 @@ class TypedRecords implements TypedRecordsInterface
         $result = new static(...$this->allowedTypes);
 
         foreach ($this->items as $item) {
-            if ($item instanceof AbstractRecord && property_exists($item, $property) && $item->{$property} === null) {
+            if (is_object($item) && property_exists($item, $property) && $item->{$property} === null) {
                 $result->add($item);
             }
         }

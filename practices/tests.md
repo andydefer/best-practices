@@ -1,3 +1,6 @@
+Voici le document complet **Principe d'usage des Tests (Version finale)** avec l'encarte ajoutée :
+
+```markdown
 # Principe d'usage des Tests (Version finale)
 
 ## 1. Définition
@@ -46,65 +49,284 @@ final class UserServiceTest extends TestCase
 
 ---
 
-## 3. Types de tests (⚠️ RÈGLE IMPORTANTE)
+## 3. Principe fondamental : TOUT ce qui contient de la logique métier DOIT être testé (⚠️ RÈGLE ABSOLUE)
 
-### 3.1 Unit Tests (isolés, sans base de données)
+> **Règle d'or : Tout fichier qui contient une logique métier (condition, boucle, calcul, transformation, orchestration) DOIT avoir son test correspondant (unitaire ou d'intégration selon le composant).**
+
+### 3.1 Ce qui DOIT être testé
+
+| Composant | Contient de la logique ? | DOIT être testé ? | Pourquoi | Type de test |
+|-----------|-------------------------|-------------------|----------|--------------|
+| **Worker** | ✅ Oui (orchestration) | ✅ **OBLIGATOIRE** | Orchestration de plusieurs Tasks | Unitaire (mocks) |
+| **Action** | ✅ Oui (orchestration HTTP) | ✅ **OBLIGATOIRE** | Transformation Request → Record → Data | Unitaire (mocks) |
+| **Task** | ✅ Oui (traitement unique) | ✅ **OBLIGATOIRE** | Action unitaire avec logique | Unitaire (mocks) |
+| **Service** | ✅ Oui (logique métier pure) | ✅ **OBLIGATOIRE** | Calculs, conditions, transformations | Unitaire (mocks) |
+| **Repository** | ✅ Oui (accès données) | ✅ **OBLIGATOIRE** | Requêtes, filtres, pagination | Intégration (base de données) |
+| **Command** | ✅ Oui (logique console) | ✅ **OBLIGATOIRE** | Logique d'export, import, nettoyage | Unitaire (mocks) |
+| **Middleware** | ✅ Oui (logique transversale) | ✅ **OBLIGATOIRE** | Authentification, autorisation, logging | Intégration (contexte HTTP) |
+| **FormRequest** | ✅ Oui (règles validation) | ✅ **OBLIGATOIRE** | Règles de validation, autorisation | Unitaire (mocks) |
+| **Enum** | ✅ Oui (méthodes métier) | ✅ **OBLIGATOIRE** | `isAdmin()`, `getLabel()`, `fromValue()` | Unitaire |
+| **Cast** | ✅ Oui (transformation) | ✅ **OBLIGATOIRE** | `get()`, `set()` | Unitaire |
+| **Trait** | ✅ Oui (logique réutilisable) | ✅ **OBLIGATOIRE** | Méthodes partagées entre classes | Unitaire (classe factice) |
+| **TypedRecords** | ✅ Oui (collection typée) | ✅ **OBLIGATOIRE** | `add()`, `filter()`, `map()`, validation types | Unitaire |
+| **Model** | ✅ Oui (accesseurs, mutateurs, scopes) | ✅ **OBLIGATOIRE** | `FullName()`, `scopeActive()`, relations | Intégration (base de données) |
+| **Route** | ✅ Oui (accès, middleware) | ✅ **OBLIGATOIRE** | Authentification, autorisation, méthodes HTTP | Intégration (requêtes HTTP) |
+
+### 3.2 Ce qui ne DOIT PAS être testé
+
+| Composant | Contient de la logique ? | DOIT être testé ? | Pourquoi |
+|-----------|-------------------------|-------------------|----------|
+| **Record** | ❌ Non | ❌ Non requis | Sac de données typé, pas de logique |
+| **Data** | ❌ Non | ❌ Non requis | Réponse API, pas de logique |
+| **Migration** | ❌ Non | ❌ Non requis | Structure de base de données uniquement |
+| **Seeder** | ❌ Non | ❌ Non requis | Données de test statiques |
+| **Config** | ❌ Non | ❌ Non requis | Configuration statique |
+| **Provider** | ❌ Non | ❌ Non requis | Enregistrement de services |
+
+### 3.3 Vérification rapide
+
+```php
+// ✅ Ce code contient de la logique → DOIT être testé
+final class UserService
+{
+    public function isAdult(UserRecord $user): bool
+    {
+        return $user->age >= 18;  // Condition → tester
+    }
+    
+    public function getActiveUsers(TypedRecords $users): TypedRecords
+    {
+        return $users->filter(fn($user) => $user->isActive);  // Logique → tester
+    }
+}
+
+// ✅ Ce code contient de la logique (accesseur) → DOIT être testé
+final class User extends Model
+{
+    protected function fullName(): Attribute  // Nouvelle syntaxe Laravel 10+
+    {
+        return Attribute::make(
+            get: fn (mixed $value, array $attributes) => $attributes['first_name'] . ' ' . $attributes['last_name'],
+        );
+    }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where('is_active', true);  // Logique → tester
+    }
+}
+
+// ❌ Ce code ne contient PAS de logique → NE DOIT PAS être testé
+final class UserRecord extends AbstractRecord
+{
+    public function __construct(
+        public readonly string $name,   // Pas de logique
+        public readonly int $age,       // Pas de logique
+    ) {}
+}
+
+// ❌ Migration sans logique → NE DOIT PAS être testée
+final class CreateUsersTable extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('users', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
+    }
+}
+```
+
+---
+
+## 4. Types de tests (⚠️ RÈGLE IMPORTANTE)
+
+### 4.1 Unit Tests (isolés, sans base de données)
 
 > **Les tests unitaires testent une unité de code isolément (une classe, une méthode). Toutes les dépendances sont mockées. La base de données n'est PAS utilisée sauf exception.**
 
 **⚠️ Règle :** Les tests unitaires doivent éviter au maximum l'utilisation de la base de données. Notre architecture est pensée pour être mockable.
 
-| Composant | Test unitaire ? | Base de données ? | Pourquoi |
-|-----------|----------------|-------------------|----------|
-| **Service** | ✅ Oui | ❌ Non | Logique métier pure, dépendances mockées |
-| **Task** | ✅ Oui | ❌ Non | Action unique, dépendances injectées |
-| **Worker** | ✅ Oui | ❌ Non | Orchestration, on mocke les Tasks |
-| **Action** | ✅ Oui | ❌ Non | Orchestration HTTP, on mocke les Workers/Services |
-| **Model** | ✅ Oui | ❌ Non | Déclarations uniquement |
-| **Enum** | ✅ Oui | ❌ Non | Pas de dépendances |
-| **FormRequest** | ✅ Oui | ❌ Non | Règles de validation |
-| **Middleware** | ✅ Oui | ❌ Non | Logique transversale |
-| **Repository** | ⚠️ Partiel | ✅ Oui | Préférer une vraie base de données en mémoire |
+| Composant | Test unitaire ? | Base de données ? | Localisation |
+|-----------|----------------|-------------------|--------------|
+| **Service** | ✅ Oui | ❌ Non | `tests/Unit/Services/` |
+| **Task** | ✅ Oui | ❌ Non | `tests/Unit/Tasks/` |
+| **Worker** | ✅ Oui | ❌ Non | `tests/Unit/Workers/` |
+| **Action** | ✅ Oui | ❌ Non | `tests/Unit/Actions/` |
+| **Enum** | ✅ Oui | ❌ Non | `tests/Unit/Enums/` |
+| **FormRequest** | ✅ Oui | ❌ Non | `tests/Unit/FormRequests/` |
+| **Cast** | ✅ Oui | ❌ Non | `tests/Unit/Casts/` |
+| **Trait** | ✅ Oui | ❌ Non | `tests/Unit/Traits/` |
+| **TypedRecords** | ✅ Oui | ❌ Non | `tests/Unit/TypedRecords/` |
+| **Command** | ✅ Oui | ❌ Non | `tests/Unit/Commands/` |
 
-**Localisation :** `tests/Unit/{Component}/{Component}Test.php`
+### 4.2 Integration Tests (avec base de données ou contexte complet)
 
-### 3.2 Feature Tests (avec base de données)
+> **Les tests d'intégration testent une fonctionnalité complète avec une vraie base de données en mémoire ou un contexte HTTP réel.**
 
-> **Les tests fonctionnels testent une fonctionnalité complète de bout en bout (une route, un workflow). Ils utilisent une vraie base de données en mémoire.**
+**⚠️ Règle :** Les tests de log, notifications, repositories, models, routes et middlewares doivent utiliser de vraies interactions en base de données.
 
-**⚠️ Règle :** Les tests de log, notifications, et tout ce qui persiste quelque part doivent utiliser de vraies interactions en base de données.
+| Composant | Test d'intégration ? | Base de données ? | Localisation |
+|-----------|---------------------|-------------------|--------------|
+| **Repository** | ✅ Oui | ✅ Oui | `tests/Integration/Repositories/` |
+| **Model** | ✅ Oui | ✅ Oui | `tests/Integration/Models/` |
+| **Route** | ✅ Oui | ✅ Oui | `tests/Integration/Routes/` |
+| **Middleware** | ✅ Oui | ✅ Oui | `tests/Integration/Middlewares/` |
+| **Action (complète)** | ✅ Oui | ✅ Oui | `tests/Integration/Actions/` |
+| **Worker (complet)** | ✅ Oui | ✅ Oui | `tests/Integration/Workers/` |
+| **Workflow complet** | ✅ Oui | ✅ Oui | `tests/Integration/Workflows/` |
 
-| Cas | Test fonctionnel ? | Base de données ? | Pourquoi |
-|-----|--------------------|-------------------|----------|
-| **Route API** | ✅ Oui | ✅ Oui | Tester la route complète avec requête HTTP |
-| **Route web (Inertia)** | ✅ Oui | ✅ Oui | Tester la route complète |
-| **Workflow complet** | ✅ Oui | ✅ Oui | Inscription → Connexion → Action |
-| **Repository** | ✅ Oui | ✅ Oui | Vérifier les vraies interactions DB |
-| **Log / Notification** | ✅ Oui | ✅ Oui | Vérifier la persistance |
+### 4.3 Règle de choix : Unit vs Integration
 
-**Localisation :** `tests/Feature/{Feature}Test.php`
-
-### 3.3 Règle de choix : Unit vs Feature
-
-| Situation | Type de test | Base de données |
-|-----------|--------------|-----------------|
-| **Logique métier pure (Service)** | Unit | ❌ Non |
-| **Orchestration (Worker)** | Unit | ❌ Non |
-| **Calcul / transformation** | Unit | ❌ Non |
-| **Validation (FormRequest)** | Unit | ❌ Non |
-| **Enum** | Unit | ❌ Non |
-| **Model (déclarations)** | Unit | ❌ Non |
-| **Middleware** | Unit | ❌ Non |
-| **Repository** | Feature | ✅ Oui |
-| **Action (route complète)** | Feature | ✅ Oui |
-| **Route avec HTTP** | Feature | ✅ Oui |
-| **Log / Notification / Mail** | Feature | ✅ Oui |
+| Situation | Type de test | Base de données | Localisation |
+|-----------|--------------|-----------------|--------------|
+| **Logique métier pure (Service)** | Unit | ❌ Non | `tests/Unit/Services/` |
+| **Orchestration (Worker)** | Unit | ❌ Non | `tests/Unit/Workers/` |
+| **Calcul / transformation** | Unit | ❌ Non | `tests/Unit/Services/` |
+| **Validation (FormRequest)** | Unit | ❌ Non | `tests/Unit/FormRequests/` |
+| **Enum** | Unit | ❌ Non | `tests/Unit/Enums/` |
+| **Cast** | Unit | ❌ Non | `tests/Unit/Casts/` |
+| **Trait** | Unit | ❌ Non | `tests/Unit/Traits/` |
+| **TypedRecords** | Unit | ❌ Non | `tests/Unit/TypedRecords/` |
+| **Command** | Unit | ❌ Non | `tests/Unit/Commands/` |
+| **Repository** | Integration | ✅ Oui | `tests/Integration/Repositories/` |
+| **Model** | Integration | ✅ Oui | `tests/Integration/Models/` |
+| **Route** | Integration | ✅ Oui | `tests/Integration/Routes/` |
+| **Middleware** | Integration | ✅ Oui | `tests/Integration/Middlewares/` |
+| **Action (route complète)** | Integration | ✅ Oui | `tests/Integration/Actions/` |
+| **Worker (complet)** | Integration | ✅ Oui | `tests/Integration/Workers/` |
 
 ---
 
-## 4. Convention de nommage (⚠️ STRICT)
+## 5. Organisation des tests par module (Mini-Package)
 
-### 4.1 Nom du fichier
+> **Les tests d'un mini-package DOIVENT être organisés dans le répertoire `tests/{ModuleName}/` et non dans `tests/Unit/` ou `tests/Feature/` globaux.**
+
+### 5.1 Structure des tests par module
+
+```
+tests/
+├── Logger/                                    ← Module Logger (mini-package)
+│   ├── Unit/
+│   │   ├── Enums/
+│   │   │   └── LogLevelTest.php
+│   │   ├── Records/
+│   │   │   ├── LogRecordTest.php
+│   │   │   └── LogQueryRecordTest.php
+│   │   ├── Config/
+│   │   │   └── LoggerConfigTest.php
+│   │   ├── Services/
+│   │   │   ├── LogPathServiceTest.php
+│   │   │   └── Tasks/
+│   │   │       ├── WriteLogTaskTest.php
+│   │   │       ├── QueryLogsTaskTest.php
+│   │   │       └── StreamLogsTaskTest.php
+│   │   └── LoggerTest.php
+│   └── Feature/
+│       └── LoggerIntegrationTest.php
+├── Currency/                                 ← Module Currency (mini-package)
+│   ├── Unit/
+│   │   ├── Enums/
+│   │   │   └── CurrencyCodeTest.php
+│   │   ├── Records/
+│   │   │   └── ConversionRecordTest.php
+│   │   ├── Config/
+│   │   │   └── CurrencyConfigTest.php
+│   │   ├── Services/
+│   │   │   ├── CurrencyConverterTest.php
+│   │   │   └── Tasks/
+│   │   │       ├── FetchRateTaskTest.php
+│   │   │       └── CacheRateTaskTest.php
+│   │   └── CurrencyConverterTest.php
+│   └── Feature/
+│       └── CurrencyIntegrationTest.php
+├── Notification/                             ← Module Notification (mini-package)
+│   ├── Unit/
+│   │   ├── Enums/
+│   │   ├── Records/
+│   │   ├── Services/
+│   │   └── NotifierTest.php
+│   └── Feature/
+│       └── NotificationIntegrationTest.php
+├── Domain/                                   ← Code métier spécifique
+│   ├── Users/
+│   │   ├── Unit/
+│   │   │   ├── Services/
+│   │   │   │   └── UserServiceTest.php
+│   │   │   └── Tasks/
+│   │   │       └── CreateUserTaskTest.php
+│   │   └── Integration/
+│   │       ├── Models/
+│   │       │   └── UserTest.php
+│   │       ├── Repositories/
+│   │       │   └── UserRepositoryTest.php
+│   │       └── Routes/
+│   │           └── UserRoutesTest.php
+│   └── Orders/
+│       ├── Unit/
+│       └── Integration/
+├── Fixtures/
+│   ├── ReplyerFixture.php
+│   └── SimpleTestData.php
+└── TestCase.php
+```
+
+### 5.2 Pourquoi cette organisation ?
+
+| Problème de l'ancienne organisation | Solution de la nouvelle organisation |
+|--------------------------------------|--------------------------------------|
+| Tests éparpillés dans `Unit/` et `Feature/` | Tests regroupés par module |
+| Difficulté à transporter un module | Les tests voyagent avec le module |
+| Pas de visibilité sur ce qui est testé | La structure des tests reflète la structure du code |
+| Maintenance difficile | Chaque module a ses propres tests |
+
+### 5.3 Exemple de test dans un module
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Logger\Unit\Services\Tasks;
+
+use AndyDefer\Logger\Services\Tasks\WriteLogTask;
+use AndyDefer\Logger\Config\LoggerConfig;
+use Tests\TestCase;
+
+final class WriteLogTaskTest extends TestCase
+{
+    private string $tempLogFile;
+    
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->tempLogFile = sys_get_temp_dir() . '/test.log';
+    }
+    
+    public function test_execute_writes_message_to_log_file(): void
+    {
+        // Arrange
+        $config = LoggerConfig::defaults()->withLogPath($this->tempLogFile);
+        $task = new WriteLogTask($config);
+        
+        // Act
+        $task->execute('Test message', 'info');
+        
+        // Assert
+        $content = file_get_contents($this->tempLogFile);
+        $this->assertStringContainsString('Test message', $content);
+        $this->assertStringContainsString('info', $content);
+    }
+}
+```
+
+---
+
+## 6. Convention de nommage (⚠️ STRICT)
+
+### 6.1 Nom du fichier
 
 > **Le fichier de test DOIT se terminer par `Test.php`.**
 
@@ -119,7 +341,7 @@ UserServiceSpec.php
 UserServiceTestCase.php
 ```
 
-### 4.2 Nom de la classe
+### 6.2 Nom de la classe
 
 > **La classe de test DOIT avoir le même nom que le fichier.**
 
@@ -131,7 +353,7 @@ final class UserServiceTest extends TestCase { ... }
 final class TestUserService extends TestCase { ... }
 ```
 
-### 4.3 Nom des méthodes (⚠️ STRICT)
+### 6.3 Nom des méthodes (⚠️ STRICT)
 
 > **Les méthodes de test DOIVENT commencer par `test_` suivies d'une description en `snake_case` décrivant le comportement attendu.**
 
@@ -147,7 +369,7 @@ public function testGetUserWhenExists(): void // ❌ Pas de snake_case
 public function test_user_exists(): void      // ❌ Pas de préfixe test_
 ```
 
-### 4.4 Structure du nom
+### 6.4 Structure du nom
 
 ```
 test_{methodName}_{expectedBehavior}_{condition}
@@ -161,7 +383,7 @@ test_{methodName}_{expectedBehavior}_{condition}
 
 ---
 
-## 5. Structure AAA (Arrange-Act-Assert)
+## 7. Structure AAA (Arrange-Act-Assert)
 
 > **⚠️ TOUT test DOIT suivre la structure AAA (Arrange, Act, Assert).**
 
@@ -182,7 +404,7 @@ public function test_calculateTotal_returns_sum_of_items(): void
 }
 ```
 
-### 5.1 Pourquoi AAA ?
+### 7.1 Pourquoi AAA ?
 
 | Étape | Rôle |
 |-------|------|
@@ -192,683 +414,46 @@ public function test_calculateTotal_returns_sum_of_items(): void
 
 ---
 
-## 6. Création des données dans les tests (⚠️ RÈGLE IMPORTANTE)
+## 8. Règle de couverture des tests par module
 
-> **⚠️ Les tests doivent être explicites. Pas de `User::factory()->create()`. Utilisez `User::create()` directement ou créez des données réelles.**
+> **Chaque classe du module qui contient de la logique DOIT être testée.**
 
-### 6.1 Arrangement simple
-
-```php
-// ✅ BON - Création explicite
-$user = User::create([
-    'name' => 'John Doe',
-    'email' => 'john@example.com',
-    'password' => bcrypt('password'),
-    'role' => UserRole::ADMIN,
-]);
-
-// ❌ MAUVAIS - Factory Laravel (trop abstrait)
-$user = User::factory()->create();
-
-// ❌ MAUVAIS - Tableau brut
-$user = new User(['id' => 1, 'name' => 'John Doe']);  // Pas de vrai enregistrement
-```
-
-### 6.2 Arrangement complexe ou répétitif
-
-> **Si l'arrangement est complexe ou répété dans plusieurs tests, créez une `Task` qui retourne un `Record`.**
-
-```php
-// App\Tasks\CreateTestUserTask.php
-final class CreateTestUserTask extends AbstractTask
-{
-    public function execute(CreateTestUserRecord $record): UserRecord
-    {
-        $user = User::create([
-            'name' => $record->name,
-            'email' => $record->email,
-            'password' => bcrypt($record->password),
-            'role' => $record->role,
-        ]);
-        
-        return new UserRecord(
-            id: $user->id,
-            name: $user->name,
-            email: $user->email,
-            role: $user->role,
-        );
-    }
-}
-
-// Utilisation dans le test
-public function test_something(): void
-{
-    // Arrange
-    $userRecord = $this->createTestUserTask->execute(new CreateTestUserRecord(
-        name: 'John Doe',
-        email: 'john@example.com',
-        role: UserRole::ADMIN,
-    ));
-    
-    // Act & Assert...
-}
-```
-
-### 6.3 Pour les tests Repository (base de données autorisée)
-
-```php
-// ✅ BON - Création explicite en base de données
-public function test_find_returns_user_when_exists(): void
-{
-    // Arrange
-    $user = User::create([
-        'name' => 'John Doe',
-        'email' => 'john@example.com',
-        'password' => bcrypt('password'),
-    ]);
-    $repository = new UserRepository();
-
-    // Act
-    $result = $repository->find($user->id);
-
-    // Assert
-    $this->assertNotNull($result);
-    $this->assertSame($user->id, $result->id);
-}
-```
+| Composant du module | DOIT être testé ? | Type de test | Localisation dans les tests |
+|---------------------|-------------------|--------------|----------------------------|
+| **Enums** (méthodes) | ✅ Oui | Unitaire | `tests/{Module}/Unit/Enums/` |
+| **Records** (si logique) | ✅ Oui | Unitaire | `tests/{Module}/Unit/Records/` |
+| **Config** (Value Object) | ✅ Oui | Unitaire | `tests/{Module}/Unit/Config/` |
+| **Services** | ✅ Oui | Unitaire | `tests/{Module}/Unit/Services/` |
+| **Tasks** | ✅ Oui | Unitaire | `tests/{Module}/Unit/Services/Tasks/` |
+| **Module principal** | ✅ Oui | Unitaire | `tests/{Module}/Unit/{Module}Test.php` |
+| **Integration** | ✅ Oui | Intégration | `tests/{Module}/Feature/` |
 
 ---
 
-## 7. Tests par composant
-
-### 7.1 Tester un Service (logique métier pure)
-
-```php
-final class PriceCalculatorServiceTest extends TestCase
-{
-    public function test_calculate_returns_total_when_items_exist(): void
-    {
-        // Arrange
-        $item1 = new OrderItemRecord(price: 10.0, quantity: 2);
-        $item2 = new OrderItemRecord(price: 5.0, quantity: 1);
-        $order = new OrderRecord(items: [$item1, $item2]);
-        $service = new PriceCalculatorService();
-
-        // Act
-        $total = $service->calculate($order);
-
-        // Assert
-        $this->assertSame(25.0, $total);
-    }
-
-    public function test_calculate_returns_zero_when_items_empty(): void
-    {
-        // Arrange
-        $order = new OrderRecord(items: []);
-        $service = new PriceCalculatorService();
-
-        // Act
-        $total = $service->calculate($order);
-
-        // Assert
-        $this->assertSame(0.0, $total);
-    }
-}
-```
-
-### 7.2 Tester un Service avec dépendances (Repository mocké)
-
-```php
-final class UserServiceTest extends TestCase
-{
-    public function test_getUser_returns_user_record_when_user_exists(): void
-    {
-        // Arrange
-        $user = User::create([
-            'name' => 'John Doe',
-            'email' => 'john@example.com',
-            'password' => bcrypt('password'),
-        ]);
-        
-        $repository = $this->createMock(UserRepository::class);
-        $repository->expects($this->once())
-            ->method('find')
-            ->with($user->id)
-            ->willReturn($user);
-        
-        $service = new UserService($repository);
-
-        // Act
-        $result = $service->getUser($user->id);
-
-        // Assert
-        $this->assertInstanceOf(UserRecord::class, $result);
-        $this->assertSame($user->id, $result->id);
-        $this->assertSame('John Doe', $result->name);
-    }
-
-    public function test_getUser_returns_null_when_user_not_found(): void
-    {
-        // Arrange
-        $repository = $this->createMock(UserRepository::class);
-        $repository->expects($this->once())
-            ->method('find')
-            ->with(999)
-            ->willReturn(null);
-        
-        $service = new UserService($repository);
-
-        // Act
-        $result = $service->getUser(999);
-
-        // Assert
-        $this->assertNull($result);
-    }
-}
-```
-
-### 7.3 Tester un Worker (orchestration)
-
-```php
-final class RegisterUserWorkerTest extends TestCase
-{
-    public function test_execute_creates_user_and_sends_email_and_logs(): void
-    {
-        // Arrange
-        $record = new RegisterUserRecord(
-            name: 'John Doe',
-            email: 'john@example.com',
-            password: 'password',
-        );
-        
-        $user = User::create([
-            'name' => 'John Doe',
-            'email' => 'john@example.com',
-            'password' => bcrypt('password'),
-        ]);
-        
-        $userRepository = $this->createMock(UserRepository::class);
-        $userRepository->expects($this->once())
-            ->method('create')
-            ->willReturn($user);
-        
-        $sendEmailTask = $this->createMock(SendWelcomeEmailTask::class);
-        $sendEmailTask->expects($this->once())
-            ->method('execute');
-        
-        $logTask = $this->createMock(LogUserActionTask::class);
-        $logTask->expects($this->once())
-            ->method('execute');
-        
-        $worker = new RegisterUserWorker($userRepository, $sendEmailTask, $logTask);
-
-        // Act
-        $worker->execute($record);
-
-        // Assert (les expect() des mocks vérifient les appels)
-        $this->assertTrue(true);
-    }
-}
-```
-
-### 7.4 Tester une Action API
-
-```php
-final class ListUsersActionTest extends TestCase
-{
-    public function test_run_returns_json_response_with_users(): void
-    {
-        // Arrange
-        $request = $this->createMock(ListUsersRequest::class);
-        $request->method('validated')->willReturn([]);
-        
-        $users = [new UserRecord(id: 1, name: 'John'), new UserRecord(id: 2, name: 'Jane')];
-        
-        $service = $this->createMock(UserService::class);
-        $service->expects($this->once())
-            ->method('getUsers')
-            ->willReturn($users);
-        
-        $action = new ListUsersAction($service);
-
-        // Act
-        $response = $action->run($request);
-
-        // Assert
-        $this->assertInstanceOf(JsonResponse::class, $response);
-        $this->assertSame(200, $response->getStatusCode());
-    }
-}
-```
-
-### 7.5 Tester une Action Web (Inertia)
-
-```php
-final class ShowDashboardActionTest extends TestCase
-{
-    public function test_run_returns_inertia_response_when_access_granted(): void
-    {
-        // Arrange
-        $request = $this->createMock(ShowDashboardRequest::class);
-        $request->method('user')->willReturn((object)['id' => 1]);
-        $request->method('fullUrl')->willReturn('/dashboard');
-        $request->method('ip')->willReturn('127.0.0.1');
-        
-        $worker = $this->createMock(HandleDashboardAccessWorker::class);
-        $worker->expects($this->once())->method('execute');
-        
-        $action = new ShowDashboardAction($worker);
-
-        // Act
-        $response = $action->run($request);
-
-        // Assert
-        $this->assertInstanceOf(\Inertia\Response::class, $response);
-    }
-}
-```
-
-### 7.6 Tester un Repository (⚠️ avec vraie base de données)
-
-```php
-final class UserRepositoryTest extends TestCase
-{
-    use RefreshDatabase; // Pour les tests Repository
-    
-    public function test_find_returns_user_when_exists(): void
-    {
-        // Arrange
-        $user = User::create([
-            'name' => 'John Doe',
-            'email' => 'john@example.com',
-            'password' => bcrypt('password'),
-        ]);
-        $repository = new UserRepository();
-
-        // Act
-        $result = $repository->find($user->id);
-
-        // Assert
-        $this->assertNotNull($result);
-        $this->assertSame($user->id, $result->id);
-        $this->assertSame('John Doe', $result->name);
-    }
-    
-    public function test_create_creates_user_with_transaction(): void
-    {
-        // Arrange
-        $record = new UserCreateRecord(
-            name: 'John Doe',
-            email: 'john@example.com',
-            password: 'password',
-            role: UserRole::USER,
-        );
-        $repository = new UserRepository();
-
-        // Act
-        $user = $repository->create($record);
-
-        // Assert
-        $this->assertDatabaseHas('users', [
-            'name' => 'John Doe',
-            'email' => 'john@example.com',
-        ]);
-    }
-}
-```
-
-### 7.7 Tester un Model
-
-```php
-final class UserTest extends TestCase
-{
-    public function test_fullName_attribute_concatenates_first_and_last_name(): void
-    {
-        // Arrange
-        $user = new User([
-            'first_name' => 'John',
-            'last_name' => 'Doe',
-        ]);
-
-        // Act
-        $fullName = $user->full_name;
-
-        // Assert
-        $this->assertSame('John Doe', $fullName);
-    }
-    
-    public function test_email_attribute_is_normalized_to_lowercase(): void
-    {
-        // Arrange
-        $user = new User([
-            'email' => 'JOHN@EXAMPLE.COM',
-        ]);
-
-        // Act & Assert
-        $this->assertSame('john@example.com', $user->email);
-    }
-}
-```
-
-### 7.8 Tester un Enum
-
-```php
-final class UserRoleTest extends TestCase
-{
-    public function test_values_returns_all_role_values(): void
-    {
-        // Arrange & Act
-        $values = UserRole::values();
-
-        // Assert
-        $this->assertSame(['admin', 'user', 'doctor'], $values);
-    }
-    
-    public function test_isAdmin_returns_true_for_admin_role(): void
-    {
-        // Arrange
-        $role = UserRole::ADMIN;
-
-        // Act & Assert
-        $this->assertTrue($role->isAdmin());
-        $this->assertFalse($role->isDoctor());
-    }
-    
-    public function test_getLabel_returns_french_label_by_default(): void
-    {
-        // Arrange
-        $role = UserRole::ADMIN;
-
-        // Act
-        $label = $role->getLabel();
-
-        // Assert
-        $this->assertSame('Administrateur', $label);
-    }
-}
-```
-
-### 7.9 Tester une FormRequest
-
-```php
-final class CreateUserRequestTest extends TestCase
-{
-    public function test_authorize_returns_true_for_admin(): void
-    {
-        // Arrange
-        $user = User::create([
-            'name' => 'Admin',
-            'email' => 'admin@example.com',
-            'password' => bcrypt('password'),
-            'role' => UserRole::ADMIN,
-        ]);
-        $this->actingAs($user);
-        $request = new CreateUserRequest();
-
-        // Act
-        $authorized = $request->authorize();
-
-        // Assert
-        $this->assertTrue($authorized);
-    }
-    
-    public function test_rules_returns_validation_rules(): void
-    {
-        // Arrange
-        $request = new CreateUserRequest();
-
-        // Act
-        $rules = $request->rules();
-
-        // Assert
-        $this->assertArrayHasKey('name', $rules);
-        $this->assertArrayHasKey('email', $rules);
-        $this->assertArrayHasKey('password', $rules);
-    }
-}
-```
-
-### 7.10 Tester un Middleware
-
-```php
-final class AuthenticateMiddlewareTest extends TestCase
-{
-    public function test_handle_redirects_to_login_when_not_authenticated(): void
-    {
-        // Arrange
-        $request = Request::create('/dashboard');
-        $middleware = new AuthenticateMiddleware();
-
-        // Act
-        $response = $middleware->handle($request, fn() => response('OK'));
-
-        // Assert
-        $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringEndsWith('/login', $response->getTargetUrl());
-    }
-    
-    public function test_handle_passes_request_when_authenticated(): void
-    {
-        // Arrange
-        $user = User::create([
-            'name' => 'John Doe',
-            'email' => 'john@example.com',
-            'password' => bcrypt('password'),
-        ]);
-        $request = Request::create('/dashboard');
-        $request->setUserResolver(fn() => $user);
-        $middleware = new AuthenticateMiddleware();
-
-        // Act
-        $response = $middleware->handle($request, fn() => response('OK'));
-
-        // Assert
-        $this->assertSame('OK', $response->getContent());
-    }
-}
-```
-
----
-
-## 8. Conseils pour un code testable
-
-### 8.1 Injection de dépendances
-
-```php
-// ❌ MAUVAIS - Difficile à tester
-final class UserService
-{
-    public function getUser(int $id): ?User
-    {
-        return User::find($id);  // Appel statique, difficile à mocker
-    }
-}
-
-// ✅ BON - Facile à tester
-final class UserService
-{
-    public function __construct(
-        private readonly UserRepository $userRepository,
-    ) {}
-    
-    public function getUser(int $id): ?User
-    {
-        return $this->userRepository->find($id);  // Injecté, facile à mocker
-    }
-}
-```
-
-### 8.2 Éviter les appels statiques
-
-```php
-// ❌ MAUVAIS - Difficile à tester
-final class UserService
-{
-    public function getCurrentUser(): ?User
-    {
-        return auth()->user();  // Appel statique
-    }
-}
-
-// ✅ BON - Passer le contexte en paramètre
-final class UserService
-{
-    public function getUser(UserContextRecord $context): ?UserRecord
-    {
-        return $this->userRepository->find($context->userId);
-    }
-}
-```
-
-### 8.3 Éviter les `new` dans les Services
-
-```php
-// ❌ MAUVAIS - Difficile à tester
-final class UserService
-{
-    public function register(RegisterUserRecord $record): void
-    {
-        $user = new User();  // Impossible à mocker
-        $user->name = $record->name;
-        $user->save();
-    }
-}
-
-// ✅ BON - Utiliser le Repository
-final class UserService
-{
-    public function __construct(
-        private readonly UserRepository $userRepository,
-    ) {}
-    
-    public function register(RegisterUserRecord $record): void
-    {
-        $this->userRepository->create($record);  // Mockable
-    }
-}
-```
-
-### 8.4 Éviter les méthodes `private` non testables
-
-```php
-// ❌ MAUVAIS - Logique dans une méthode privée (non testable isolément)
-final class PriceCalculatorService
-{
-    public function calculate(OrderRecord $record): float
-    {
-        return $this->calculateTax($record);
-    }
-    
-    private function calculateTax(OrderRecord $record): float  // Non testable seule
-    {
-        return $record->subtotal * 0.20;
-    }
-}
-
-// ✅ BON - Méthode publique ou extraite dans un Service
-final class PriceCalculatorService
-{
-    public function calculate(OrderRecord $record): float
-    {
-        return $this->calculateTax($record->subtotal);
-    }
-    
-    public function calculateTax(float $subtotal): float  // Testable
-    {
-        return $subtotal * 0.20;
-    }
-}
-
-// ✅ BON - Extraite dans un Service dédié
-final class TaxCalculatorService
-{
-    public function calculate(float $subtotal): float
-    {
-        return $subtotal * 0.20;
-    }
-}
-```
-
-### 8.5 Utiliser des interfaces pour les dépendances
-
-```php
-// ✅ BON - Interface pour faciliter le mocking
-interface UserRepositoryInterface
-{
-    public function find(int $id): ?User;
-}
-
-final class UserService
-{
-    public function __construct(
-        private readonly UserRepositoryInterface $userRepository,  // Interface = facile à mocker
-    ) {}
-}
-```
-
-### 8.6 Éviter les "magic strings" et "magic numbers"
-
-```php
-// ❌ MAUVAIS - Magic number
-if ($user->role === 'admin') { ... }
-
-// ✅ BON - Utiliser un Enum
-if ($user->role->isAdmin()) { ... }
-
-// ❌ MAUVAIS - Magic number dans un test
-$this->assertSame(30, $result);  // Pourquoi 30 ?
-
-// ✅ BON - Constante ou variable explicite
-$expectedDays = 30;
-$this->assertSame($expectedDays, $result);
-```
-
----
-
-## 9. Organisation des dossiers
-
-```
-tests/
-├── Unit/
-│   ├── Services/
-│   │   └── UserServiceTest.php
-│   ├── Tasks/
-│   │   └── SendWelcomeEmailTaskTest.php
-│   ├── Workers/
-│   │   └── RegisterUserWorkerTest.php
-│   ├── Actions/
-│   │   ├── Api/
-│   │   │   └── Users/
-│   │   │       ├── ListUsersActionTest.php
-│   │   │       └── CreateUserActionTest.php
-│   │   └── Web/
-│   │       └── Dashboard/
-│   │           └── ShowDashboardActionTest.php
-│   ├── Models/
-│   │   └── UserTest.php
-│   ├── Enums/
-│   │   └── UserRoleTest.php
-│   ├── Factories/
-│   │   └── UserDataFactoryTest.php
-│   ├── FormRequests/
-│   │   └── CreateUserRequestTest.php
-│   └── Middlewares/
-│       └── AuthenticateMiddlewareTest.php
-├── Feature/
-│   ├── Repositories/
-│   │   └── UserRepositoryTest.php
-│   ├── Controllers/
-│   │   └── Api/
-│   │       └── Users/
-│   │           ├── ListUsersControllerTest.php
-│   │           └── CreateUserControllerTest.php
-│   └── Auth/
-│       └── AuthenticationTest.php
-├── Fixtures/
-│   ├── ReplyerFixture.php
-│   └── SimpleTestData.php
-└── TestCase.php
-```
+## 9. Tableau récapitulatif complet par composant
+
+| Composant | Contient de la logique ? | DOIT être testé ? | Type de test | Base de données | Localisation |
+|-----------|-------------------------|-------------------|--------------|-----------------|--------------|
+| **Action** | ✅ Orchestration HTTP | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Actions/` |
+| **Action (intégration)** | ✅ Route complète | ✅ OUI | Intégration | ✅ Oui | `tests/{Module}/Feature/` |
+| **Cast** | ✅ Transformation | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Casts/` |
+| **Command** | ✅ Logique console | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Commands/` |
+| **Data** | ❌ Aucune | ❌ NON | - | - | - |
+| **Enum** | ✅ Méthodes métier | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Enums/` |
+| **FormRequest** | ✅ Règles validation | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/FormRequests/` |
+| **Middleware** | ✅ Logique transversale | ✅ OUI | Intégration | ✅ Oui | `tests/{Module}/Feature/` |
+| **Migration** | ❌ Structure DB | ❌ NON | - | - | - |
+| **Model** | ✅ Accesseurs, mutateurs, scopes | ✅ OUI | Intégration | ✅ Oui | `tests/{Module}/Integration/Models/` |
+| **Record** | ❌ Aucune | ❌ NON | - | - | - |
+| **Repository** | ✅ Accès données, requêtes | ✅ OUI | Intégration | ✅ Oui | `tests/{Module}/Integration/Repositories/` |
+| **Route** | ✅ Accès, middleware | ✅ OUI | Intégration | ✅ Oui | `tests/{Module}/Integration/Routes/` |
+| **Seeder** | ❌ Données statiques | ❌ NON | - | - | - |
+| **Service** | ✅ Logique métier pure | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Services/` |
+| **Task** | ✅ Traitement unique | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Services/Tasks/` |
+| **Trait** | ✅ Logique réutilisable | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Traits/` |
+| **TypedRecords** | ✅ Collection typée | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/TypedRecords/` |
+| **Worker** | ✅ Orchestration de Tasks | ✅ OUI | Unitaire | ❌ Non | `tests/{Module}/Unit/Workers/` |
+| **Worker (intégration)** | ✅ Workflow complet | ✅ OUI | Intégration | ✅ Oui | `tests/{Module}/Feature/` |
 
 ---
 
@@ -880,17 +465,17 @@ tests/
 | **Nom classe** | `{Component}Test` |
 | **Nom méthode** | `test_{methodName}_{expectedBehavior}_{condition}` |
 | **Structure** | AAA (Arrange, Act, Assert) |
-| **Type test** | Unit = classe isolée (sans DB), Feature = avec DB |
+| **Type test** | Unit = classe isolée (sans DB), Integration = avec DB ou contexte HTTP |
+| **Organisation** | Tests regroupés par module dans `tests/{ModuleName}/` |
 | **Factories Laravel** | ❌ Interdit (préférer `User::create()`) |
 | **Mocking** | Utiliser les mocks pour les dépendances |
-| **Base de données** | Unit = ❌ éviter, Feature = ✅ utiliser |
-| **Repository** | Feature avec `RefreshDatabase` |
+| **Base de données** | Unit = ❌ éviter, Integration = ✅ utiliser |
 
 ---
 
 ## 11. Règle d'or
 
-> **Un test doit être explicite, isolé, rapide et lisible. Si un test est difficile à écrire, c'est que ton code est difficile à tester. Refactorise. Les données de test sont créées explicitement avec `User::create()`, pas avec des factories.**
+> **Un test doit être explicite, isolé, rapide et lisible. Si un test est difficile à écrire, c'est que ton code est difficile à tester. Refactorise. Les données de test sont créées explicitement avec `User::create()`, pas avec des factories. Les tests sont organisés par module dans `tests/{ModuleName}/`.**
 
 ```php
 // Le test parfait
@@ -934,6 +519,219 @@ final class PerfectServiceTest extends TestCase
         
         // Assert: Confirm the dependency method was called exactly once
         $dependency->shouldHaveReceived('getValue')->once();
+    }
+}
+```
+
+> **Rappel final : Si tu as un doute sur la nécessité de tester un composant, pose-toi la question : "Ce composant contient-il une condition (`if`), une boucle (`foreach`), un calcul, une transformation de données, ou une orchestration d'appels ?" Si oui, TESTE-LE.**
+
+---
+
+## 12. Interdiction du mot-clé `final` sur les classes destinées aux tests unitaires (⚠️ RÈGLE ABSOLUE)
+
+> **⚠️ CRITIQUE : Les classes qui sont destinées à être testées unitairement (Services, Tasks, Workers, Actions, etc.) NE DOIVENT PAS être déclarées `final`. Le mot-clé `final` empêche PHPUnit de créer des mocks, rendant les tests impossibles.**
+
+### 12.1 Problème : Le mot-clé `final` bloque le mocking
+
+```php
+// ❌ MAUVAIS - Classe finale impossible à mocker
+final class QueryLogsTask
+{
+    public function execute(LogQueryRecord $query): TypedRecords
+    {
+        // ...
+    }
+}
+
+// Dans le test
+$queryTask = $this->createMock(QueryLogsTask::class);
+// ❌ Exception: Class "QueryLogsTask" is declared "final" and cannot be doubled
+```
+
+**Pourquoi cela pose problème ?**
+
+| Problème | Conséquence |
+|----------|-------------|
+| **Impossible de mocker** | PHPUnit ne peut pas créer de mock d'une classe finale |
+| **Tests impossibles** | On ne peut pas isoler la classe testée de ses dépendances |
+| **Couplage forcé** | On est obligé d'utiliser la vraie implémentation |
+| **Tests d'intégration seulement** | Impossible de faire des tests unitaires purs |
+
+### 12.2 Solution : NE PAS utiliser `final` sur les classes à tester
+
+```php
+// ✅ BON - Classe sans final, mockable
+class QueryLogsTask  // Pas de "final"
+{
+    public function execute(LogQueryRecord $query): TypedRecords
+    {
+        // ...
+    }
+}
+
+// Dans le test - Ça fonctionne !
+$queryTask = $this->createMock(QueryLogsTask::class);
+$queryTask->expects($this->once())->method('execute')->willReturn($expectedResults);
+```
+
+### 12.3 Quand utiliser `final` (cas autorisés)
+
+| Cas | Autorisation | Exemple |
+|-----|--------------|---------|
+| **Classes sans logique métier** | ✅ Oui | `Record`, `Data`, `Config` (Value Objects) |
+| **Classes sans dépendances** | ✅ Oui | `Enum`, `AbstractRecord`, `AbstractData` |
+| **Classes de production uniquement** | ⚠️ À éviter | Préférer ne pas mettre `final` |
+| **Classes avec dépendances** | ❌ **INTERDIT** | Services, Tasks, Workers, Actions |
+
+### 12.4 Comparaison : final vs non-final
+
+| Aspect | Avec `final` | Sans `final` |
+|--------|--------------|--------------|
+| **Mockabilité** | ❌ Impossible | ✅ Possible |
+| **Testabilité unitaire** | ❌ Impossible | ✅ Possible |
+| **Performance** | ⚠️ Théoriquement meilleure | ✅ Négligeable |
+| **Héritage** | ❌ Interdit | ✅ Possible (mais rare) |
+| **Sécurité** | ⚠️ Empêche l'héritage malveillant | ✅ Géré par d'autres moyens |
+
+### 12.5 Règle de décision
+
+```php
+// ❌ INTERDIT - Classe avec logique ET dépendances
+final class UserService  // ← Supprimer "final"
+{
+    public function __construct(
+        private readonly UserRepository $repository,
+    ) {}
+}
+
+// ✅ AUTORISÉ - Record sans logique
+final class UserRecord extends AbstractRecord  // ← final autorisé
+{
+    public function __construct(
+        public readonly string $name,
+        public readonly string $email,
+    ) {}
+}
+
+// ✅ AUTORISÉ - Enum sans dépendances
+final class UserRole extends AbstractEnum  // ← final autorisé
+{
+    public const ADMIN = 'admin';
+    public const USER = 'user';
+}
+```
+
+### 12.6 Exemple d'erreur et correction
+
+**Erreur PHPUnit :**
+```
+PHPUnit\Framework\MockObject\Generator\ClassIsFinalException: 
+Class "AndyDefer\BestPractices\Logger\Services\Tasks\QueryLogsTask" 
+is declared "final" and cannot be doubled
+```
+
+**Solution :**
+
+```php
+// ❌ Avant (cause l'erreur)
+final class QueryLogsTask
+{
+    // ...
+}
+
+// ✅ Après (correction)
+class QueryLogsTask  // Suppression du mot-clé "final"
+{
+    // ...
+}
+```
+
+### 12.7 Récapitulatif des classes concernées
+
+| Type de classe | `final` autorisé ? | Raison |
+|----------------|-------------------|--------|
+| **Service** | ❌ Non | Contient de la logique, doit être mockable |
+| **Task** | ❌ Non | Contient de la logique, doit être mockable |
+| **Worker** | ❌ Non | Contient de l'orchestration, doit être mockable |
+| **Action** | ❌ Non | Contient de l'orchestration HTTP, doit être mockable |
+| **Repository** | ❌ Non | Accès base de données, doit être mockable |
+| **Command** | ❌ Non | Logique console, doit être mockable |
+| **Middleware** | ❌ Non | Logique transversale, doit être mockable |
+| **Enum** | ✅ Oui | Pas de dépendances, pas de logique complexe |
+| **Record** | ✅ Oui | Sac de données immutable |
+| **Data** | ✅ Oui | Réponse API immutable |
+| **Config** (Value Object) | ✅ Oui | Configuration immutable |
+| **Abstract Class** | ✅ Oui | Par définition abstraite |
+
+### 12.8 Règle d'or
+
+> **Pour les classes destinées aux tests unitaires (Services, Tasks, Workers, Actions, Repositories, Commands, Middlewares), le mot-clé `final` est STRICTEMENT INTERDIT. Ces classes DOIVENT pouvoir être mockées par PHPUnit.**
+>
+> **Le mot-clé `final` est autorisé UNIQUEMENT pour les classes sans logique métier (Records, Data, Config, Enums).**
+
+```php
+// ✅ BON - Service mockable
+class UserService  // Pas de "final"
+{
+    public function __construct(
+        private readonly UserRepository $repository,
+    ) {}
+}
+
+// ✅ BON - Record avec final autorisé
+final class UserRecord extends AbstractRecord
+{
+    public function __construct(
+        public readonly int $id,
+        public readonly string $name,
+    ) {}
+}
+
+// ❌ MAUVAIS - Service avec final (non testable)
+final class UserService  // ← Supprimer "final" immédiatement
+{
+    // ...
+}
+```
+
+---
+
+## 13. Tableau récapitulatif final des interdictions pour la testabilité
+
+| Interdit | Pourquoi | Alternative |
+|----------|----------|-------------|
+| `final` sur les Services/Tasks/Workers | Empêche le mocking | Supprimer `final` |
+| `Log::info()` direct | Appel statique non mockable | Interface `LoggerInterface` injectée |
+| `User::find()` direct | Appel statique non mockable | Repository injecté |
+| `Cache::put()` direct | Facade statique non mockable | Interface `CacheInterface` injectée |
+| `Mail::send()` direct | Facade statique non mockable | Interface `MailerInterface` injectée |
+| `DB::table()` direct | Facade statique non mockable | Repository avec interface |
+| `new` dans le constructeur | Coupling caché non mockable | Injection de dépendances |
+| Helper retournant une instance | Appel statique déguisé | Injection de dépendances |
+
+---
+
+## 14. Règle d'or finale
+
+> **ZÉRO `final` sur les classes avec logique. ZÉRO appel statique. TOUTES les dépendances injectées. Si vous voyez `final class UserService` ou `Log::info()` dans un Service, c'est une erreur.**
+
+```php
+// ✅ Ce qui est testable
+class TestableService  // Pas de "final"
+{
+    public function __construct(
+        private readonly LoggerInterface $logger,
+        private readonly UserRepository $userRepository,
+    ) {}
+}
+
+// ❌ Ce qui ne l'est PAS
+final class UntestableService  // ❌ "final" interdit
+{
+    public function execute(): void
+    {
+        Log::info('message');  // ❌ Appel statique
+        User::find(1);         // ❌ Appel statique
     }
 }
 ```

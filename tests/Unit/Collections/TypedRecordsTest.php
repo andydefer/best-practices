@@ -10,6 +10,7 @@ use AndyDefer\BestPractices\Tests\Fixtures\Records\TestProductRecord;
 use AndyDefer\BestPractices\Tests\Fixtures\Records\TestUserRecord;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use stdClass;
 
 final class TypedRecordsTest extends TestCase
 {
@@ -152,10 +153,10 @@ final class TypedRecordsTest extends TestCase
     public function test_construct_throws_exception_for_non_record_class(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/must extend .*AbstractRecord/');
+        $this->expectExceptionMessageMatches('/must extend AbstractRecord|must extend .*AbstractRecord/');
 
         // Act
-        new TypedRecords(\stdClass::class);
+        new TypedRecords(\DateTime::class);
     }
 
     // ========== TESTS DE VALIDATION DES ITEMS ==========
@@ -1225,8 +1226,11 @@ final class TypedRecordsTest extends TestCase
     {
         // Arrange
         $product = new TestProductRecord(name: 'Product');
-        $collection = new TypedRecords(TestProductRecord::class, 'int', 'string', 'float', 'bool');
-        $collection->add($product, 42, 'hello', 3.14, true);
+        $obj = new stdClass;
+        $obj->test = 'value';
+
+        $collection = new TypedRecords(TestProductRecord::class, 'int', 'string', 'float', 'bool', 'null', stdClass::class);
+        $collection->add($product, 42, 'hello', 3.14, true, null, $obj);
 
         // Act
         $result = $collection->scalars();
@@ -1239,7 +1243,8 @@ final class TypedRecordsTest extends TestCase
         sort($actual);
 
         $this->assertSame($expected, $actual);
-        $this->assertEqualsCanonicalizing([42, 'hello', 3.14, true], $result->toArray());
+        // stdClass n'est PAS un scalaire, donc pas dans le résultat
+        $this->assertEqualsCanonicalizing([42, 'hello', 3.14, true, null], $result->toArray());
     }
 
     public function test_scalars_returns_empty_collection_when_no_scalars(): void
@@ -1283,7 +1288,7 @@ final class TypedRecordsTest extends TestCase
         $collection = new TypedRecords('string');
 
         // Act
-        $collection->ofRecord(\stdClass::class);
+        $collection->ofRecord(stdClass::class);
     }
 
     // ========== TESTS DE ANY RECORD ==========
@@ -1952,5 +1957,414 @@ final class TypedRecordsTest extends TestCase
 
         // Act
         $collection->validate(fn ($item, $index) => $item > 0);
+    }
+
+    // ========== TESTS POUR STDCLASS ==========
+
+    public function test_construct_accepts_stdclass_type(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj = new stdClass;
+        $obj->name = 'John Doe';
+
+        // Act
+        $collection->add($obj);
+
+        // Assert
+        $this->assertCount(1, $collection->toArray());
+        $this->assertSame([stdClass::class], $collection->getAllowedTypes());
+        $this->assertInstanceOf(stdClass::class, $collection->firstItem());
+        $this->assertSame('John Doe', $collection->firstItem()->name);
+    }
+
+    public function test_add_accepts_stdclass_when_allowed(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj1 = new stdClass;
+        $obj1->id = 1;
+        $obj2 = new stdClass;
+        $obj2->id = 2;
+
+        // Act
+        $collection->add($obj1, $obj2);
+
+        // Assert
+        $this->assertCount(2, $collection->toArray());
+        $this->assertSame(1, $collection->firstItem()->id);
+        $this->assertSame(2, $collection->lastItem()->id);
+    }
+
+    public function test_add_accepts_mixed_scalars_and_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords('int', 'string', stdClass::class);
+        $obj = new stdClass;
+        $obj->value = 'test';
+
+        // Act
+        $collection->add(42, 'hello', $obj);
+
+        // Assert
+        $this->assertCount(3, $collection->toArray());
+        $this->assertSame(42, $collection->toArray()[0]);
+        $this->assertSame('hello', $collection->toArray()[1]);
+        $this->assertInstanceOf(stdClass::class, $collection->toArray()[2]);
+    }
+
+    public function test_add_accepts_stdclass_in_multi_type_collection(): void
+    {
+        // Arrange
+        $collection = new TypedRecords('int', 'float', 'string', 'bool', 'null', stdClass::class);
+        $obj = new stdClass;
+        $obj->data = 'test';
+
+        // Act
+        $collection->add(42, 3.14, 'text', true, null, $obj);
+
+        // Assert
+        $this->assertCount(6, $collection->toArray());
+        $this->assertInstanceOf(stdClass::class, $collection->lastItem());
+    }
+
+    public function test_of_type_returns_stdclass_items(): void
+    {
+        // Arrange
+        $collection = new TypedRecords('int', stdClass::class);
+        $obj1 = new stdClass;
+        $obj1->id = 1;
+        $obj2 = new stdClass;
+        $obj2->id = 2;
+        $collection->add(42, $obj1, $obj2);
+
+        // Act
+        $result = $collection->ofType(stdClass::class);
+
+        // Assert
+        $this->assertSame([stdClass::class], $result->getAllowedTypes());
+        $this->assertCount(2, $result->toArray());
+        $this->assertSame(1, $result->firstItem()->id);
+        $this->assertSame(2, $result->lastItem()->id);
+    }
+
+    public function test_except_type_removes_stdclass_items(): void
+    {
+        // Arrange
+        $collection = new TypedRecords('int', stdClass::class);
+        $obj = new stdClass;
+        $obj->id = 1;
+        $collection->add(42, $obj);
+
+        // Act
+        $result = $collection->exceptType(stdClass::class);
+
+        // Assert
+        $this->assertSame(['int'], $result->getAllowedTypes());
+        $this->assertCount(1, $result->toArray());
+        $this->assertSame(42, $result->firstItem());
+    }
+
+    public function test_records_does_not_include_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(TestProductRecord::class, stdClass::class);
+        $product = new TestProductRecord(name: 'Product');
+        $obj = new stdClass;
+        $obj->data = 'test';
+        $collection->add($product, $obj);
+
+        // Act
+        $result = $collection->records();
+
+        // Assert
+        $this->assertCount(1, $result->toArray());
+        $this->assertInstanceOf(TestProductRecord::class, $result->firstItem());
+        $this->assertNotInstanceOf(stdClass::class, $result->firstItem());
+    }
+
+    public function test_scalars_does_not_include_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords('int', stdClass::class);
+        $obj = new stdClass;
+        $obj->data = 'test';
+        $collection->add(42, $obj);
+
+        // Act
+        $result = $collection->scalars();
+
+        // Assert
+        $this->assertCount(1, $result->toArray());
+        $this->assertSame(42, $result->firstItem());
+        $this->assertNotInstanceOf(stdClass::class, $result->firstItem());
+    }
+
+    public function test_where_works_with_stdclass_properties(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+
+        $obj1 = new stdClass;
+        $obj1->status = 'active';
+        $obj1->id = 1;
+
+        $obj2 = new stdClass;
+        $obj2->status = 'inactive';
+        $obj2->id = 2;
+
+        $obj3 = new stdClass;
+        $obj3->status = 'active';
+        $obj3->id = 3;
+
+        $collection->add($obj1, $obj2, $obj3);
+
+        // Act
+        $result = $collection->where('status', 'active');
+
+        // Assert
+        $this->assertCount(2, $result->toArray());
+        $this->assertSame(1, $result->toArray()[0]->id);
+        $this->assertSame(3, $result->toArray()[1]->id);
+    }
+
+    public function test_where_not_null_works_with_stdclass_properties(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+
+        $obj1 = new stdClass;
+        $obj1->name = 'John';
+
+        $obj2 = new stdClass;
+        $obj2->name = null;
+
+        $obj3 = new stdClass;
+        $obj3->name = 'Jane';
+
+        $collection->add($obj1, $obj2, $obj3);
+
+        // Act
+        $result = $collection->whereNotNull('name');
+
+        // Assert
+        $this->assertCount(2, $result->toArray());
+        $this->assertSame('John', $result->toArray()[0]->name);
+        $this->assertSame('Jane', $result->toArray()[1]->name);
+    }
+
+    public function test_where_null_works_with_stdclass_properties(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+
+        $obj1 = new stdClass;
+        $obj1->name = 'John';
+
+        $obj2 = new stdClass;
+        $obj2->name = null;
+
+        $obj3 = new stdClass;
+        $obj3->name = 'Jane';
+
+        $collection->add($obj1, $obj2, $obj3);
+
+        // Act
+        $result = $collection->whereNull('name');
+
+        // Assert
+        $this->assertCount(1, $result->toArray());
+        $this->assertNull($result->firstItem()->name);
+    }
+
+    public function test_contains_works_with_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj = new stdClass;
+        $obj->id = 1;
+        $collection->add($obj);
+
+        // Act & Assert
+        $this->assertTrue($collection->contains($obj));
+
+        $otherObj = new stdClass;
+        $otherObj->id = 2;
+        $this->assertFalse($collection->contains($otherObj));
+    }
+
+    public function test_map_transforms_stdclass_to_scalar(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+
+        $obj1 = new stdClass;
+        $obj1->value = 10;
+
+        $obj2 = new stdClass;
+        $obj2->value = 20;
+
+        $collection->add($obj1, $obj2);
+
+        // Act
+        $result = $collection->map(fn ($item) => $item->value * 2);
+
+        // Assert
+        $this->assertSame(['int'], $result->getAllowedTypes());
+        $this->assertSame([20, 40], $result->toArray());
+    }
+
+    public function test_map_transforms_stdclass_to_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+
+        $obj1 = new stdClass;
+        $obj1->name = 'John';
+
+        $obj2 = new stdClass;
+        $obj2->name = 'Jane';
+
+        $collection->add($obj1, $obj2);
+
+        // Act
+        $result = $collection->map(function ($item) {
+            $newObj = new stdClass;
+            $newObj->fullName = $item->name.' Doe';
+
+            return $newObj;
+        });
+
+        // Assert
+        $this->assertSame([stdClass::class], $result->getAllowedTypes());
+        $this->assertCount(2, $result->toArray());
+        $this->assertSame('John Doe', $result->toArray()[0]->fullName);
+        $this->assertSame('Jane Doe', $result->toArray()[1]->fullName);
+    }
+
+    // ========== TESTS D'INTERDICTION DES OBJETS ARBITRAIRES ==========
+
+    public function test_construct_rejects_arbitrary_class_type(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must extend AbstractRecord|must extend .*AbstractRecord/');
+
+        // Act
+        new TypedRecords(\DateTime::class);
+    }
+
+    public function test_add_rejects_resource(): void
+    {
+        $this->expectException(\TypeError::class);
+        $this->expectExceptionMessageMatches('/resource given/');
+
+        // Arrange
+        $collection = new TypedRecords('string');
+        $resource = fopen('php://memory', 'r');
+
+        // Act
+        $collection->add($resource);
+    }
+
+    public function test_mixed_collection_with_scalars_stdclass_and_records(): void
+    {
+        // Arrange
+        $collection = new TypedRecords('int', 'string', stdClass::class, TestProductRecord::class);
+
+        $obj = new stdClass;
+        $obj->type = 'stdclass';
+        $product = new TestProductRecord(name: 'Product A');
+
+        // Act
+        $collection->add(42, 'hello', $obj, $product);
+
+        // Assert
+        $this->assertCount(4, $collection->toArray());
+        $this->assertSame(42, $collection->toArray()[0]);
+        $this->assertSame('hello', $collection->toArray()[1]);
+        $this->assertInstanceOf(stdClass::class, $collection->toArray()[2]);
+        $this->assertInstanceOf(TestProductRecord::class, $collection->toArray()[3]);
+    }
+
+    public function test_get_types_includes_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords('int', stdClass::class, TestProductRecord::class);
+        $obj = new stdClass;
+        $product = new TestProductRecord(name: 'Product');
+        $collection->add(42, $obj, $product);
+
+        // Act
+        $result = $collection->getTypes();
+
+        // Assert
+        $this->assertEqualsCanonicalizing(['int', stdClass::class, TestProductRecord::class], $result->toArray());
+    }
+
+    public function test_is_only_type_with_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj1 = new stdClass;
+        $obj2 = new stdClass;
+        $collection->add($obj1, $obj2);
+
+        // Act & Assert
+        $this->assertTrue($collection->isOnlyType(stdClass::class));
+    }
+
+    public function test_is_homogeneous_with_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj1 = new stdClass;
+        $obj2 = new stdClass;
+        $collection->add($obj1, $obj2);
+
+        // Act & Assert
+        $this->assertTrue($collection->isHomogeneous());
+    }
+
+    public function test_assert_all_of_type_with_stdclass(): void
+    {
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj1 = new stdClass;
+        $obj2 = new stdClass;
+        $collection->add($obj1, $obj2);
+
+        // Act
+        $result = $collection->assertAllOfType(stdClass::class);
+
+        // Assert
+        $this->assertSame($collection, $result);
+    }
+
+    public function test_assert_scalar_throws_with_stdclass(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Expected scalar value');
+
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj = new stdClass;
+        $collection->add($obj);
+
+        // Act
+        $collection->assertScalar();
+    }
+
+    public function test_assert_records_throws_with_stdclass(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Expected AbstractRecord');
+
+        // Arrange
+        $collection = new TypedRecords(stdClass::class);
+        $obj = new stdClass;
+        $collection->add($obj);
+
+        // Act
+        $collection->assertRecords();
     }
 }

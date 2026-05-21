@@ -36,6 +36,9 @@ public array $tags = [];
 | `'null'` | Valeur nulle | `new TypedRecords('string', 'null')` |
 | `Record::class` | Classe Record | `new TypedRecords(UserRecord::class)` |
 | `TypedRecords::class` | Collection imbriquée | `new TypedRecords(TypedRecords::class)` |
+| `stdClass::class` | Objet simple (désérialisation JSON) | `new TypedRecords(stdClass::class)` |
+
+⚠️ **Important :** Les objets arbitraires (non stdClass, non AbstractRecord, non TypedRecords) sont **STRICTEMENT INTERDITS**.
 
 ### 3.1 Types multiples
 
@@ -47,25 +50,43 @@ $mixed->add(42, 3.14, 'text');
 // Collection acceptant Records et scalaires
 $items = new TypedRecords(ProductRecord::class, 'string');
 $items->add(new ProductRecord(name: 'Laptop'), 'Just a description');
+
+// Collection acceptant stdClass
+$objects = new TypedRecords(stdClass::class);
+$obj = new stdClass();
+$obj->name = 'John';
+$objects->add($obj);
 ```
 
 ## 4. Création d'une collection
 
-### 4.1 Via le constructeur
+### 4.1 Création d'une collection
 
 ```php
+// Collection de strings
 $tags = new TypedRecords('string');
 $tags->add('developer', 'laravel', 'php');
-```
 
-### 4.2 Via le helper `typed_records()`
+// Collection d'entiers
+$ids = new TypedRecords('int');
+$ids->add(1, 2, 3, 4, 5);
 
-```php
-$tags = typed_records('string');
-$tags->add('developer', 'laravel', 'php');
+// Collection avec plusieurs types scalaires
+$mixed = new TypedRecords('int', 'float', 'string');
+$mixed->add(42, 3.14, 'text');
 
-// Avec plusieurs types
-$mixed = typed_records('int', 'float', 'string');
+// Collection de Records
+$products = new TypedRecords(ProductRecord::class);
+$products->add(new ProductRecord(name: 'Laptop', price: 999));
+
+// Collection de collections (imbriquée)
+$nested = new TypedRecords(TypedRecords::class);
+$nested->add($tags, $ids);
+
+// Collection de stdClass (désérialisation JSON)
+$objects = new TypedRecords(stdClass::class);
+$obj = json_decode('{"name":"John","age":30}');
+$objects->add($obj);
 ```
 
 ## 5. Méthodes de base
@@ -73,9 +94,10 @@ $mixed = typed_records('int', 'float', 'string');
 ### 5.1 Ajout d'éléments
 
 ```php
-// add() - Ajoute un ou plusieurs éléments
+// add() - Ajoute un ou plusieurs éléments (supporte le chaînage)
 $collection->add('hello');                    // un seul élément
 $collection->add('a', 'b', 'c');              // plusieurs éléments
+$collection->add(1, 2, 3)->add('end');        // chaînage
 ```
 
 ### 5.2 Lecture des éléments
@@ -110,7 +132,7 @@ if ($collection->isEmpty()) { ... }
 if ($collection->isNotEmpty()) { ... }
 
 // getAllowedTypes() - Types autorisés
-$types = $collection->getAllowedTypes(); // TypedRecords<string>
+$types = $collection->getAllowedTypes(); // array
 ```
 
 ## 6. Méthodes de transformation
@@ -131,6 +153,15 @@ $names->add('Product A', 'Product B');
 
 $products = $names->map(fn($name) => new ProductRecord(name: $name));
 // Résultat : TypedRecords<ProductRecord>
+
+// Transformer des stdClass en scalaires
+$objects = new TypedRecords(stdClass::class);
+$obj1 = (object) ['value' => 10];
+$obj2 = (object) ['value' => 20];
+$objects->add($obj1, $obj2);
+
+$values = $objects->map(fn($item) => $item->value * 2);
+// Résultat : TypedRecords<int> avec [20, 40]
 ```
 
 ### 6.2 filter() - Filtrer les éléments
@@ -174,7 +205,7 @@ $sorted = $numbers->sort(); // TypedRecords [1, 2, 3]
 // Par fonction
 $sorted = $products->sortBy(fn($item) => $item->price);
 
-// Par propriété (pour les Records)
+// Par propriété (pour les Records ou stdClass)
 $sorted = $products->sortBy('price');
 
 // Ordre décroissant
@@ -226,14 +257,17 @@ $maxPrice = $products->max(fn($product) => $product->price);
 ### 8.1 ofType() - Filtrer par type
 
 ```php
-$collection = new TypedRecords('int', 'string', 'float');
-$collection->add(42, 'hello', 3.14, 100, 'world');
+$collection = new TypedRecords('int', 'string', 'float', stdClass::class);
+$collection->add(42, 'hello', 3.14, 100, 'world', (object) ['test' => true]);
 
 $strings = $collection->ofType('string');
 // Résultat : ['hello', 'world']
 
 $records = $collection->ofType(ProductRecord::class);
 // Résultat : uniquement les ProductRecord
+
+$stdClasses = $collection->ofType(stdClass::class);
+// Résultat : uniquement les stdClass
 ```
 
 ### 8.2 exceptType() - Exclure un type
@@ -255,6 +289,7 @@ $onlyRecords = $collection->records();
 ```php
 $onlyScalars = $collection->scalars();
 // Résultat : uniquement les scalaires (int, string, float, bool, null)
+// stdClass et Records sont exclus
 ```
 
 ### 8.5 ofRecord() - Filtrer par classe Record spécifique
@@ -279,9 +314,10 @@ $types = $collection->getTypes();
 
 ## 9. Méthodes de recherche
 
-### 9.1 where() - Filtrer par propriété (pour Records)
+### 9.1 where() - Filtrer par propriété
 
 ```php
+// Pour les Records
 $products = new TypedRecords(ProductRecord::class);
 $products->add(
     new ProductRecord(name: 'Product A', price: 100),
@@ -291,6 +327,16 @@ $products->add(
 
 $cheapProducts = $products->where('price', 100);
 // Résultat : Product A et Product C
+
+// Pour les stdClass
+$objects = new TypedRecords(stdClass::class);
+$obj1 = (object) ['status' => 'active', 'id' => 1];
+$obj2 = (object) ['status' => 'inactive', 'id' => 2];
+$obj3 = (object) ['status' => 'active', 'id' => 3];
+$objects->add($obj1, $obj2, $obj3);
+
+$activeObjects = $objects->where('status', 'active');
+// Résultat : $obj1 et $obj3
 ```
 
 ### 9.2 whereNotNull() - Propriété non nulle
@@ -536,11 +582,27 @@ $result = (new TypedRecords('int'))
 // Résultat : [6, 10, 16]
 ```
 
+### 13.4 Utilisation avec stdClass (désérialisation JSON)
+
+```php
+// Simuler des données désérialisées
+$data = json_decode('[{"id":1,"name":"John"},{"id":2,"name":"Jane"}]');
+
+$collection = new TypedRecords(stdClass::class);
+foreach ($data as $item) {
+    $collection->add($item);
+}
+
+// Filtrer par propriété
+$filtered = $collection->where('id', 1);
+// Résultat : l'objet avec id=1
+```
+
 ## 14. Récapitulatif des méthodes
 
 | Catégorie | Méthodes |
 |-----------|----------|
-| **Ajout** | `add()`, `concat()` |
+| **Ajout** | `add()` |
 | **Lecture** | `all()`, `firstItem()`, `first()`, `lastItem()`, `last()` |
 | **État** | `count()`, `isEmpty()`, `isNotEmpty()`, `getAllowedTypes()` |
 | **Transformation** | `map()`, `filter()`, `reject()`, `each()`, `sort()`, `sortBy()`, `reverse()`, `shuffle()` |
@@ -564,18 +626,7 @@ $collection->add('a', 'b', 'c');
 $collection->add('a')->add('b')->add('c');
 ```
 
-### 15.2 Utiliser `concat()` pour les listes dynamiques
-
-```php
-// ✅ Pour une liste dynamique
-$tags = ['developer', 'laravel', 'php', 'mysql'];
-$collection->concat($tags);
-
-// ✅ Pour 3+ éléments statiques
-$collection->concat(['a', 'b', 'c', 'd', 'e']);
-```
-
-### 15.3 Typer explicitement dans les Records
+### 15.2 Typer explicitement dans les Records
 
 ```php
 final class UserRecord extends AbstractRecord
@@ -587,7 +638,7 @@ final class UserRecord extends AbstractRecord
 }
 ```
 
-### 15.4 Utiliser les assertions pour valider les données
+### 15.3 Utiliser les assertions pour valider les données
 
 ```php
 $collection
@@ -596,7 +647,7 @@ $collection
     ->assertScalar();
 ```
 
-### 15.5 Chaîner les opérations pour plus de lisibilité
+### 15.4 Chaîner les opérations pour plus de lisibilité
 
 ```php
 $result = $collection
@@ -614,7 +665,8 @@ $result = $collection
 | `Expected type(s) string, got int` | Vérifier que le type de l'élément correspond au type déclaré |
 | `Enum is not allowed in TypedRecords` | Utiliser la valeur scalaire de l'enum (`$enum->value`) |
 | `Cannot exclude all allowed types` | S'assurer qu'au moins un type reste après `exceptType()` |
-| `Type "X" must extend AbstractRecord` | La classe doit étendre `AbstractRecord` |
+| `Type "X" must extend AbstractRecord` | La classe doit étendre `AbstractRecord` ou être `stdClass` |
+| `Object of type "DateTime" is not allowed` | Seuls `stdClass`, `AbstractRecord` et `TypedRecords` sont autorisés |
 
 ## 17. Collections utilitaires prêtes à l'emploi
 
@@ -652,68 +704,6 @@ final class UserRecord extends AbstractRecord
     ) {}
 }
 ```
-
-### 17.3 Méthodes spécifiques StringTypedRecords
-
-| Méthode | Description | Exemple |
-|---------|-------------|---------|
-| `toLowercase(): self` | Convertit toutes les chaînes en minuscules | `$tags->toLowercase()` |
-| `toUppercase(): self` | Convertit toutes les chaînes en majuscules | `$tags->toUppercase()` |
-| `containsSubstring(string $search): self` | Filtre les chaînes contenant une sous-chaîne | `$tags->containsSubstring('dev')` |
-| `startsWith(string $prefix): self` | Filtre les chaînes commençant par un préfixe | `$tags->startsWith('a')` |
-| `endsWith(string $suffix): self` | Filtre les chaînes se terminant par un suffixe | `$tags->endsWith('.php')` |
-| `filterEmpty(): self` | Supprime les chaînes vides | `$tags->filterEmpty()` |
-| `trim(): self` | Supprime les espaces en début et fin | `$tags->trim()` |
-| `truncate(int $length, string $suffix = '...'): self` | Limite la longueur des chaînes | `$tags->truncate(10)` |
-
-### 17.4 Méthodes spécifiques IntTypedRecords
-
-| Méthode | Description | Exemple |
-|---------|-------------|---------|
-| `positive(): self` | Filtre les nombres positifs | `$counts->positive()` |
-| `negative(): self` | Filtre les nombres négatifs | `$counts->negative()` |
-| `zero(): self` | Filtre les nombres zéro | `$counts->zero()` |
-| `nonNegative(): self` | Filtre les nombres >= 0 | `$counts->nonNegative()` |
-| `between(int $min, int $max): self` | Filtre les nombres dans un intervalle | `$counts->between(10, 100)` |
-| `even(): self` | Filtre les nombres pairs | `$counts->even()` |
-| `odd(): self` | Filtre les nombres impairs | `$counts->odd()` |
-| `median(): float` | Calcule la médiane | `$counts->median()` |
-
-### 17.5 Méthodes spécifiques FloatTypedRecords
-
-| Méthode | Description | Exemple |
-|---------|-------------|---------|
-| `positive(): self` | Filtre les nombres positifs | `$prices->positive()` |
-| `negative(): self` | Filtre les nombres négatifs | `$prices->negative()` |
-| `between(float $min, float $max): self` | Filtre les nombres dans un intervalle | `$prices->between(10.5, 99.9)` |
-| `round(int $precision = 0): self` | Arrondit chaque nombre | `$prices->round(2)` |
-| `ceil(): self` | Arrondit à l'entier supérieur | `$prices->ceil()` |
-| `floor(): self` | Arrondit à l'entier inférieur | `$prices->floor()` |
-| `format(int $decimals = 2): self` | Arrondit avec un nombre spécifique de décimales | `$prices->format(2)` |
-
-### 17.6 Méthodes spécifiques BoolTypedRecords
-
-| Méthode | Description | Exemple |
-|---------|-------------|---------|
-| `trueOnly(): self` | Garde uniquement les valeurs `true` | `$flags->trueOnly()` |
-| `falseOnly(): self` | Garde uniquement les valeurs `false` | `$flags->falseOnly()` |
-| `countTrue(): int` | Compte le nombre de `true` | `$flags->countTrue()` |
-| `countFalse(): int` | Compte le nombre de `false` | `$flags->countFalse()` |
-| `allTrue(): bool` | Vérifie si toutes les valeurs sont `true` | `$flags->allTrue()` |
-| `allFalse(): bool` | Vérifie si toutes les valeurs sont `false` | `$flags->allFalse()` |
-| `anyTrue(): bool` | Vérifie si au moins une valeur est `true` | `$flags->anyTrue()` |
-| `anyFalse(): bool` | Vérifie si au moins une valeur est `false` | `$flags->anyFalse()` |
-
-### 17.7 Méthodes spécifiques NumberTypedRecords
-
-| Méthode | Description | Exemple |
-|---------|-------------|---------|
-| `positive(): self` | Filtre les nombres positifs | `$numbers->positive()` |
-| `negative(): self` | Filtre les nombres négatifs | `$numbers->negative()` |
-| `zero(): self` | Filtre les nombres zéro (0 ou 0.0) | `$numbers->zero()` |
-| `nonNegative(): self` | Filtre les nombres >= 0 | `$numbers->nonNegative()` |
-| `between(int\|float $min, int\|float $max): self` | Filtre les nombres dans un intervalle | `$numbers->between(10, 100)` |
-| `average(): float` | Calcule la moyenne | `$numbers->average()` |
 
 ## 18. Création de vos propres collections utilitaires
 
@@ -760,6 +750,8 @@ $electronics = $products->filterByCategory('electronics');  // Laptop et Mouse
 ## 19. Règle d'or
 
 > **Dans un Record, les tableaux bruts sont STRICTEMENT INTERDITS. Utilisez TOUJOURS `TypedRecords` pour les collections. La collection garantit le type de chaque élément et offre des méthodes puissantes pour les manipuler.**
+>
+> **⚠️ Seuls les types suivants sont autorisés : scalaires (int, float, string, bool, null), `AbstractRecord`, `TypedRecords` et `stdClass`. Aucun autre objet n'est accepté.**
 
 ```php
 // La collection parfaite
@@ -769,6 +761,7 @@ final class PerfectRecord extends AbstractRecord
         public readonly TypedRecords $tags = new TypedRecords('string'),
         public readonly TypedRecords $items = new TypedRecords(ItemRecord::class),
         public readonly TypedRecords $mixed = new TypedRecords('int', 'float', 'string'),
+        public readonly TypedRecords $objects = new TypedRecords(stdClass::class),
     ) {}
 }
 ```

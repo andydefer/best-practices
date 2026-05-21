@@ -330,24 +330,20 @@ $items->add(new ProductRecord(name: 'Laptop'), 'Just a description');
 ### 5.5 Création d'une collection
 
 ```php
-// Via le constructeur
+// ✅ BON - Via le constructeur uniquement
 $tags = new TypedRecords('string');
 $tags->add('developer', 'laravel', 'php');
 
-// Via le helper typed_records() (usage ponctuel recommandé)
-$tags = typed_records('string');
-$tags->add('developer', 'laravel', 'php');
-
-// Avec plusieurs types
-$mixed = typed_records('int', 'float', 'string');
+// ✅ BON - Avec plusieurs types
+$mixed = new TypedRecords('int', 'float', 'string');
 $mixed->add(42, 3.14, 'text');
 
-// Collection de Records
-$products = typed_records(ProductRecord::class);
+// ✅ BON - Collection de Records
+$products = new TypedRecords(ProductRecord::class);
 $products->add(new ProductRecord(name: 'Laptop', price: 999));
 
-// Collection de collections (nested)
-$nested = typed_records(TypedRecords::class);
+// ✅ BON - Collection de collections (nested)
+$nested = new TypedRecords(TypedRecords::class);
 $nested->add($tags, $ids);
 ```
 
@@ -1388,7 +1384,7 @@ final class OrderService
 | **Héritage** | Étend `AbstractRecord` |
 | **Propriétés** | `public` (l'important est d'être public, `readonly` est optionnel) |
 | **Types autorisés** | `int`, `string`, `float`, `bool`, `null`, `Enum`, `Record`, `TypedRecords` |
-| **TypedRecords** | Utiliser `new TypedRecords('type')` ou `typed_records()` helper |
+| **TypedRecords** | Utiliser `new TypedRecords('type')` |
 | **Types interdits** | `array` brut, `Model`, `Data`, `Collection`, `Carbon`, `DateTime`, `mixed`, `object` |
 | **Sérialisation** | Automatique via `toArray()`, `toDatabase()`, `toJson()` |
 | **Convention** | Les clés sont automatiquement converties en `snake_case` |

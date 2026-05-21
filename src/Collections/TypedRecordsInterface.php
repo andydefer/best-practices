@@ -11,6 +11,7 @@ use Countable;
 use InvalidArgumentException;
 use IteratorAggregate;
 use JsonSerializable;
+use stdClass;
 use Stringable;
 
 /**
@@ -26,7 +27,7 @@ interface TypedRecordsInterface extends ArrayAccess, Countable, IteratorAggregat
      * @param  TValue  ...$items
      * @return TypedRecords<TValue>
      */
-    public function add(int|string|float|bool|null|AbstractRecord|TypedRecords ...$items): TypedRecords;
+    public function add(int|string|float|bool|null|AbstractRecord|TypedRecords|stdClass ...$items): TypedRecords;
 
     /**
      * Convert the collection to a plain array.
@@ -100,7 +101,7 @@ interface TypedRecordsInterface extends ArrayAccess, Countable, IteratorAggregat
      *
      * @return TValue|null
      */
-    public function firstItem(): null|int|string|float|bool|AbstractRecord|TypedRecords;
+    public function firstItem(): null|int|string|float|bool|AbstractRecord|TypedRecords|stdClass;
 
     /**
      * Get first n items as new collection.
@@ -114,7 +115,7 @@ interface TypedRecordsInterface extends ArrayAccess, Countable, IteratorAggregat
      *
      * @return TValue|null
      */
-    public function lastItem(): null|int|string|float|bool|AbstractRecord|TypedRecords;
+    public function lastItem(): null|int|string|float|bool|AbstractRecord|TypedRecords|stdClass;
 
     /**
      * Get last n items as new collection.
@@ -183,7 +184,7 @@ interface TypedRecordsInterface extends ArrayAccess, Countable, IteratorAggregat
     /**
      * Check if contains a value.
      */
-    public function contains(int|string|float|bool|null|AbstractRecord|TypedRecords $value): bool;
+    public function contains(int|string|float|bool|null|AbstractRecord|TypedRecords|stdClass $value): bool;
 
     /**
      * Get only items of a specific type.
@@ -245,7 +246,7 @@ interface TypedRecordsInterface extends ArrayAccess, Countable, IteratorAggregat
      *
      * @return TypedRecords<TValue>
      */
-    public function where(string $property, int|string|float|bool|null|AbstractRecord|TypedRecords $value): TypedRecords;
+    public function where(string $property, int|string|float|bool|null|AbstractRecord|TypedRecords|stdClass $value): TypedRecords;
 
     /**
      * Filter items where property is not null (for records only).
