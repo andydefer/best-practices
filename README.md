@@ -30,6 +30,8 @@ Ce package contient la documentation exhaustive des conventions, bonnes pratique
 | [practices/services.md](./practices/services.md) | Logique métier pure (calculs, validation) ou services techniques (cache, email). **⚠️ ZÉRO appel statique, TOUTES les dépendances injectées** |
 | [practices/workers.md](./practices/workers.md) | Orchestration d'opérations complexes. **⚠️ ZÉRO transaction, ZÉRO retour de valeur** |
 | [practices/tasks.md](./practices/tasks.md) | Actions de même nature (ex: multiples créations DB, logs, appels API). **⚠️ ZÉRO appel statique, TOUTES les dépendances injectées** |
+| [practices/logger.md](./practices/logger.md) | Système de logs structurés en JSONL |
+| [practices/directives.md](./practices/directives.md) | Système de commandes CLI découplé et testable |
 
 ### Accès aux données
 
@@ -86,32 +88,7 @@ Ce package contient la documentation exhaustive des conventions, bonnes pratique
 
 ---
 
-## 📁 Structure de dossiers recommandée
-
-```
-app/
-├── Actions/           # Une Action par route (web/API séparés)
-│   ├── Api/
-│   └── Web/
-├── Data/              # DTOs pour réponses API (fromRecord)
-├── Records/           # Communication interne (Services, Repositories)
-├── TypedRecords/      # Collections type-safe (StringTypedRecords, IntTypedRecords, etc.)
-├── Services/          # Logique métier pure
-├── Workers/           # Orchestration d'opérations complexes (ZÉRO transaction)
-├── Tasks/             # Actions unitaires de même nature
-├── Repositories/      # Accès aux données (étendent AbstractRepository)
-├── Models/            # Modèles anémiques (déclarations uniquement)
-├── Enums/             # Enums typés avec trait Enumable
-├── Contracts/         # Interfaces (avec suffixe "able")
-├── Traits/            # Traits (avec préfixe "Has")
-├── Http/
-│   ├── Requests/      # Form Requests (étendent AbstractRequest)
-│   └── Middlewares/   # Middlewares (auth, logs, CORS)
-└── ...
-```
-
----
-
-**Version:** 2.0.0  
+**Version:** 3.0.0  
 **Mainteneur:** Andydefer  
-**Dernière mise à jour:** 2026-05-18
+**Dernière mise à jour:** 2026-05-21
+```

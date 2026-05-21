@@ -22,7 +22,6 @@ final class DirectiveIntegrationTest extends TestCase
 
         $this->fixturesPath = __DIR__.'/../Fixtures/Directives';
 
-        // Utiliser default() et withDirectivesPath() au lieu de new
         $config = DirectiveConfig::default()->withDirectivesPath($this->fixturesPath);
 
         $this->app->instance(DirectiveConfig::class, $config);
@@ -33,7 +32,10 @@ final class DirectiveIntegrationTest extends TestCase
 
     public function test_kernel_returns_success_for_list_command(): void
     {
+        // Capturer la sortie pour éviter l'affichage en console
+        ob_start();
         $result = $this->kernel->run(['directive', '--list']);
+        ob_end_clean();
 
         $this->assertSame(ExitCode::SUCCESS, $result);
     }
