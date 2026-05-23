@@ -38,20 +38,6 @@
             "AndyDefer\\BestPractices\\Tests\\": "tests/"
         }
     },
-    "bin": [
-        "bin/directive"
-    ],
-    "scripts": {
-        "post-install-cmd": [
-            "@php -r \"file_exists('directive') || copy('vendor/andydefer/best-practices/bin/directive', 'directive') && chmod('directive', 0755) && print('✓ Directive installed! Run: php directive --help\\n');\""
-        ],
-        "post-update-cmd": [
-            "@php -r \"file_exists('directive') || copy('vendor/andydefer/best-practices/bin/directive', 'directive') && chmod('directive', 0755);\""
-        ],
-        "post-uninstall-cmd": [
-            "@php -r \"if(file_exists('directive')) unlink('directive');\""
-        ]
-    },
     "extra": {
         "laravel": {
             "providers": [

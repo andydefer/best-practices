@@ -15,16 +15,6 @@
         <testsuite name="Logger Feature">
             <directory suffix="Test.php">./tests/Logger/Feature</directory>
         </testsuite>
-
-        <!-- Tests Unitaires du Directive -->
-        <testsuite name="Directive Unit">
-            <directory suffix="Test.php">./tests/Directive/Unit</directory>
-        </testsuite>
-        
-        <!-- Tests d'Intégration du Logger -->
-        <testsuite name="Directive Feature">
-            <directory suffix="Test.php">./tests/Directive/Feature</directory>
-        </testsuite>
         
         <!-- Tests Unitaires généraux (pour compatibilité) -->
         <testsuite name="Unit">
