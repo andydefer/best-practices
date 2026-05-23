@@ -5,9 +5,9 @@
 **Logger** est un système de logs structurés en JSONL (JSON Lines). Il organise les logs par date et par heure, avec un format strictement typé et sécurisé.
 
 ```php
-use AndyDefer\BestPractices\Logger\Logger;
-use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
-use AndyDefer\BestPractices\Logger\Records\LogDataRecord;
+use AndyDefer\Logger\Logger;
+use AndyDefer\Logger\Collections\MixedPayloadCollection;
+use AndyDefer\Logger\Records\LogDataRecord;
 
 // Log structuré avec payload typé
 $payload = new MixedPayloadCollection();
@@ -19,9 +19,70 @@ $logger->info($logData);
 
 ---
 
-## 2. Architecture
+## 2. Pourquoi ne pas utiliser le système de logs natif de Laravel ?
 
-### 2.1 Structure des fichiers sur disque
+### 2.1 Problèmes du système Laravel
+
+| Problème | Explication | Conséquence |
+|----------|-------------|-------------|
+| **Héritage UNIX dépassé** | Le système de logs PHP/Laravel repose sur les formats UNIX des années 1980 (syslog) | Format non structuré, difficile à parser |
+| **Absence de format standard** | Chaque entrée est une ligne de texte libre | Impossible de requêter ou filtrer efficacement |
+| **Types non préservés** | Les tableaux, objets et types complexes sont perdus | `['user' => ['id' => 1]]` devient `"Array"` |
+| **Context non typé** | `Log::info('message', ['user' => $user])` | Aucune validation, erreurs silencieuses |
+| **Pas de séparation sémantique** | Message et contexte mélangés | `"User 123 logged in from 127.0.0.1"` = impossible à parser |
+
+### 2.2 Comparaison concrète
+
+```php
+// Laravel native - Message libre, contexte non typé
+Log::info("User {$userId} logged in from {$ip}");
+// Sortie: [2024-01-15 14:30:00] local.INFO: User 123 logged in from 127.0.0.1
+
+// Notre Logger - Structure typée et requêtable
+$payload = new MixedPayloadCollection();
+$payload->add('user_login', $userId, $ip, true);
+$logger->info(new LogDataRecord(type: 'auth', payload: $payload));
+// Sortie: {"time":"2024-01-15T14:30:00Z","level":"info","data":{"type":"auth","payload":["user_login",123,"127.0.0.1",true]}}
+```
+
+### 2.3 Problème critique pour les tests
+
+| Problème | Laravel native | Notre Logger |
+|----------|----------------|--------------|
+| **Assertion sur le message** | `$this->assertStringContainsString('User 123', $log)` | Fragile, dépend du texte exact |
+| **Assertion sur le contexte** | Impossible de tester le contexte typé | `$this->assertTrue($log->data->payload->contains(123))` |
+| **Mock du logger** | `Log::shouldReceive('info')->with('message')` | Mock du message exact, casse à la moindre modification |
+| **Vérification des types** | Impossible (tout devient string) | `$this->assertInstanceOf(MixedPayloadCollection::class, $log->data->payload)` |
+| **Fiabilité des tests** | Faible (refactoring casse les tests) | Élevée (structure stable et typée) |
+
+**Exemple de test fragile avec Laravel native :**
+```php
+// ❌ Test qui casse si on change la formulation
+Log::shouldReceive('info')->with('User 123 logged in from 127.0.0.1');
+
+// ❌ Impossible de tester la structure des données
+Log::shouldReceive('info')->with(Argument::that(function ($message) {
+    return str_contains($message, '123') && str_contains($message, '127.0.0.1');
+}));
+```
+
+**Exemple de test robuste avec notre Logger :**
+```php
+// ✅ Test qui ne casse pas - structure indépendante du texte
+$logger->expects($this->once())
+    ->method('info')
+    ->with($this->callback(function ($logData) {
+        return $logData->type === 'auth'
+            && $logData->payload->contains(123)
+            && $logData->payload->contains('127.0.0.1');
+    }));
+```
+
+---
+
+## 3. Architecture
+
+### 3.1 Structure des fichiers sur disque
 
 ```
 LOGS/
@@ -42,7 +103,7 @@ LOGS/
 | Concurrence d'écriture | Plusieurs fichiers = moins de verrouillage |
 | Archivage flexible | Nettoyage possible à granularité horaire |
 
-### 2.2 Format du fichier JSONL
+### 3.2 Format du fichier JSONL
 
 Chaque ligne = un événement JSON :
 
@@ -69,23 +130,27 @@ Chaque ligne = un événement JSON :
 | `time` | `string` | Timestamp ISO 8601 UTC (automatique) |
 | `level` | `string` | debug, info, warning, error |
 | `data.type` | `string` | Type d'événement métier |
-| `data.payload` | `array` | Données du log |
+| `data.payload` | `array` | Données du log (typées à la source) |
+
+**Avantages du format JSONL :**
+- Chaque ligne est indépendante (pas besoin de parser tout le fichier)
+- Streaming possible (lecture ligne par ligne)
+- Compatible avec tous les outils de traitement de logs (ELK, Loki, Datadog)
+- Append-only (pas de réécriture, idéal pour les logs)
 
 ---
 
-## 3. Installation
+## 4. Installation
 
 ```bash
-composer require andydefer/best-practices
+composer require andydefer/laravel-logger
 ```
 
-### 3.1 Publication de la configuration (optionnel)
+### 4.1 Prérequis
 
-```bash
-php artisan vendor:publish --tag=logger-config
-```
+Ce package dépend de `andydefer/php-records` pour les structures typées.
 
-### 3.2 Variables d'environnement
+### 4.2 Variables d'environnement (optionnel)
 
 ```env
 LOGGER_PATH=/custom/log/path
@@ -94,37 +159,44 @@ LOGGER_RETENTION_DAYS=60
 
 ---
 
-## 4. Configuration
+## 5. Configuration
 
-### 4.1 Value Object LoggerConfig
+### 5.1 Value Object LoggerConfig
 
 ```php
-use AndyDefer\BestPractices\Logger\Config\LoggerConfig;
+use AndyDefer\Logger\Config\LoggerConfig;
 
 // Configuration par défaut
 $config = LoggerConfig::default();
 // basePath = storage_path('logs/structured')
 // retentionDays = 30
 
-// Configuration personnalisée (chaînage)
+// Configuration personnalisée (chaînage immuable)
 $config = LoggerConfig::default()
     ->withBasePath('/custom/log/path')
     ->withRetentionDays(60);
 ```
 
-### 4.2 Fichier de configuration (optionnel)
+### 5.2 Configuration via Laravel (optionnel)
 
 ```php
-// config/logger.php
+// config/logger.php (à créer manuellement)
 return [
     'path' => env('LOGGER_PATH', storage_path('logs/structured')),
     'retention_days' => env('LOGGER_RETENTION_DAYS', 30),
 ];
 ```
 
-### 4.3 Injection personnalisée
+### 5.3 Injection personnalisée
 
 ```php
+use AndyDefer\Logger\Logger;
+use AndyDefer\Logger\Config\LoggerConfig;
+use AndyDefer\Logger\Services\LogPathService;
+use AndyDefer\Logger\Tasks\WriteLogTask;
+use AndyDefer\Logger\Tasks\QueryLogsTask;
+use AndyDefer\Logger\Tasks\StreamLogsTask;
+
 final class CustomLogger extends Logger
 {
     public function __construct()
@@ -145,12 +217,12 @@ final class CustomLogger extends Logger
 
 ---
 
-## 5. Utilisation de base
+## 6. Utilisation de base
 
-### 5.1 Injection de dépendances
+### 6.1 Injection de dépendances
 
 ```php
-use AndyDefer\BestPractices\Logger\Contracts\LoggerInterface;
+use AndyDefer\Logger\Contracts\LoggerInterface;
 
 final class UserService
 {
@@ -160,10 +232,10 @@ final class UserService
 }
 ```
 
-### 5.2 Création d'un payload
+### 6.2 Création d'un payload
 
 ```php
-use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
+use AndyDefer\Logger\Collections\MixedPayloadCollection;
 
 $payload = new MixedPayloadCollection();
 
@@ -180,7 +252,7 @@ $payload->add('user_login', $userId, $ip, true);
 $payload->add('user_login')->add($userId)->add($ip)->add(true);
 ```
 
-### 5.3 Types acceptés dans le payload
+### 6.3 Types acceptés dans le payload
 
 | Type | Exemple |
 |------|---------|
@@ -190,13 +262,13 @@ $payload->add('user_login')->add($userId)->add($ip)->add(true);
 | `bool` | `$payload->add(true)` |
 | `null` | `$payload->add(null)` |
 | `AbstractRecord` | `$payload->add($userRecord)` |
-| `TypedRecords` | `$payload->add($tags)` |
+| `TypedCollection` | `$payload->add($tags)` |
 | `stdClass` | `$payload->add($obj)` |
 
-### 5.4 Création d'un LogDataRecord
+### 6.4 Création d'un LogDataRecord
 
 ```php
-use AndyDefer\BestPractices\Logger\Records\LogDataRecord;
+use AndyDefer\Logger\Records\LogDataRecord;
 
 $logData = new LogDataRecord(
     type: 'user_login',
@@ -204,7 +276,7 @@ $logData = new LogDataRecord(
 );
 ```
 
-### 5.5 Écriture des logs
+### 6.5 Écriture des logs
 
 ```php
 // Les 4 niveaux de log (timestamp automatique)
@@ -214,22 +286,22 @@ $logger->warning($logData);
 $logger->error($logData);
 ```
 
-### 5.6 Exemple complet
+### 6.6 Exemple complet
 
 ```php
 $payload = new MixedPayloadCollection();
 $payload->add('user_login', $user->id, request()->ip(), true);
 
-$logData = new LogDataRecord(type: 'user_login', payload: $payload);
+$logData = new LogDataRecord(type: 'auth', payload: $payload);
 
 $logger->info($logData);
 ```
 
 ---
 
-## 6. Types acceptés et refusés
+## 7. Types acceptés et refusés
 
-### 6.1 Types ACCEPTÉS dans le payload
+### 7.1 Types ACCEPTÉS dans le payload
 
 | Type | Exemple | Utilisation |
 |------|---------|-------------|
@@ -239,33 +311,33 @@ $logger->info($logData);
 | `bool` | `$payload->add(true)` | Succès/échec, flags |
 | `null` | `$payload->add(null)` | Valeurs optionnelles |
 | `AbstractRecord` | `$payload->add($userRecord)` | Objets métier typés |
-| `TypedRecords` | `$payload->add($tags)` | Collections imbriquées |
+| `TypedCollection` | `$payload->add($tags)` | Collections imbriquées |
 | `stdClass` | `$payload->add($obj)` | Désérialisation JSON |
 
-### 6.2 Types REFUSÉS dans le payload
+### 7.2 Types REFUSÉS dans le payload
 
 | Type | Pourquoi |
 |------|----------|
-| `array` | Non sérialisable proprement, utiliser `TypedRecords` |
+| `array` | Non sérialisable proprement, utiliser `TypedCollection` |
 | `DateTime` | Objet arbitraire non autorisé |
-| Toute autre classe | Seuls `AbstractRecord`, `TypedRecords` et `stdClass` sont autorisés |
+| Toute autre classe | Seuls `AbstractRecord`, `TypedCollection` et `stdClass` sont autorisés |
 | `Enum` | Utiliser la valeur scalaire (`$enum->value`) |
 
-### 6.3 Message d'erreur explicite
+### 7.3 Message d'erreur explicite
 
 ```php
 // Tentative d'ajout d'un objet non autorisé
 $payload->add(new DateTime());
 
-// Exception: Object of type "DateTime" is not allowed in TypedRecords. 
-// Only stdClass, AbstractRecord, and TypedRecords are allowed.
+// Exception: Object of type "DateTime" is not allowed in TypedCollection. 
+// Only stdClass, AbstractRecord, and TypedCollection are allowed.
 ```
 
 ---
 
-## 7. MixedPayloadCollection - Méthodes détaillées
+## 8. MixedPayloadCollection - Méthodes détaillées
 
-### 7.1 Méthodes de base
+### 8.1 Méthodes de base
 
 ```php
 // add() - Ajoute un ou plusieurs éléments (chaînable)
@@ -284,7 +356,7 @@ if ($collection->isNotEmpty()) { ... }
 $types = $collection->getAllowedTypes(); // ['int', 'string', ...]
 ```
 
-### 7.2 Lecture des éléments
+### 8.2 Lecture des éléments
 
 ```php
 // toArray() - Convertit en tableau PHP
@@ -306,7 +378,7 @@ $last = $collection->lastItem();
 $lastTwo = $collection->last(2);
 ```
 
-### 7.3 Transformation
+### 8.3 Transformation
 
 ```php
 // map() - Transforme chaque élément
@@ -322,7 +394,7 @@ $rejected = $collection->reject(fn($item) => $item > 3);
 $collection->each(fn($item) => $sum += $item);
 ```
 
-### 7.4 Ordre et tri
+### 8.4 Ordre et tri
 
 ```php
 // sort() - Trie les éléments
@@ -339,7 +411,7 @@ $reversed = $collection->reverse();
 $shuffled = $collection->shuffle();
 ```
 
-### 7.5 Calculs
+### 8.5 Calculs
 
 ```php
 // sum() - Somme des éléments
@@ -354,7 +426,7 @@ $max = $collection->max();
 $min = $collection->min();
 ```
 
-### 7.6 Filtrage par type
+### 8.6 Filtrage par type
 
 ```php
 // ofType() - Éléments d'un type spécifique
@@ -381,7 +453,7 @@ $allRecords = $collection->anyRecord();
 $types = $collection->getTypes();
 ```
 
-### 7.7 Recherche
+### 8.7 Recherche
 
 ```php
 // where() - Filtrer par propriété (pour objets)
@@ -403,7 +475,7 @@ if ($collection->containsType('int')) { ... }
 if ($collection->isOnlyType('int')) { ... }
 ```
 
-### 7.8 Slicing et pagination
+### 8.8 Slicing et pagination
 
 ```php
 // take() - n premiers éléments
@@ -423,7 +495,7 @@ $offsetOne = $collection->nth(2, 1);
 $reindexed = $collection->values();
 ```
 
-### 7.9 Manipulation avancée
+### 8.9 Manipulation avancée
 
 ```php
 // unique() - Supprime les doublons
@@ -449,7 +521,7 @@ $withoutNull = $collection->filterNull();
 $randomItems = $collection->random(3);
 ```
 
-### 7.10 Validation et assertions
+### 8.10 Validation et assertions
 
 ```php
 // isHomogeneous() - Tous du même type ?
@@ -482,13 +554,13 @@ $collection->validate(fn($item, $index) => $item > 0);
 
 ---
 
-## 8. LogDataRecord
+## 9. LogDataRecord
 
 ```php
-namespace AndyDefer\BestPractices\Logger\Records;
+namespace AndyDefer\Logger\Records;
 
-use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
-use AndyDefer\BestPractices\Records\AbstractRecord;
+use AndyDefer\Logger\Collections\MixedPayloadCollection;
+use AndyDefer\Records\AbstractRecord;
 
 final class LogDataRecord extends AbstractRecord
 {
@@ -501,14 +573,14 @@ final class LogDataRecord extends AbstractRecord
 
 ---
 
-## 9. LogRecord
+## 10. LogRecord
 
 ```php
-namespace AndyDefer\BestPractices\Logger\Records;
+namespace AndyDefer\Logger\Records;
 
-use AndyDefer\BestPractices\Logger\Enums\LogLevel;
-use AndyDefer\BestPractices\Records\AbstractRecord;
-use AndyDefer\BestPractices\Records\Recordable;
+use AndyDefer\Logger\Enums\LogLevel;
+use AndyDefer\Records\AbstractRecord;
+use AndyDefer\Records\Recordable;
 
 final class LogRecord extends AbstractRecord
 {
@@ -522,13 +594,13 @@ final class LogRecord extends AbstractRecord
 
 ---
 
-## 10. LogQueryRecord
+## 11. LogQueryRecord
 
 ```php
-namespace AndyDefer\BestPractices\Logger\Records;
+namespace AndyDefer\Logger\Records;
 
-use AndyDefer\BestPractices\Logger\Enums\LogLevel;
-use AndyDefer\BestPractices\Records\AbstractRecord;
+use AndyDefer\Logger\Enums\LogLevel;
+use AndyDefer\Records\AbstractRecord;
 
 final class LogQueryRecord extends AbstractRecord
 {
@@ -550,10 +622,10 @@ final class LogQueryRecord extends AbstractRecord
 
 ---
 
-## 11. LogLevel
+## 12. LogLevel
 
 ```php
-namespace AndyDefer\BestPractices\Logger\Enums;
+namespace AndyDefer\Logger\Enums;
 
 enum LogLevel: string
 {
@@ -572,9 +644,9 @@ enum LogLevel: string
 
 ---
 
-## 12. Recherche et requêtage
+## 13. Recherche et requêtage
 
-### 12.1 Query par type d'événement
+### 13.1 Query par type d'événement
 
 ```php
 $query = new LogQueryRecord(
@@ -596,7 +668,7 @@ foreach ($results as $log) {
 }
 ```
 
-### 12.2 Query par niveau de log
+### 13.2 Query par niveau de log
 
 ```php
 $query = new LogQueryRecord(
@@ -607,7 +679,7 @@ $query = new LogQueryRecord(
 $errors = $logger->query($query);
 ```
 
-### 12.3 Query combinée
+### 13.3 Query combinée
 
 ```php
 $query = new LogQueryRecord(
@@ -619,14 +691,20 @@ $query = new LogQueryRecord(
 $failedPayments = $logger->query($query);
 ```
 
-### 12.4 Streaming
+### 13.4 Streaming avec StreamLogsTask
 
 ```php
-// Tous les logs d'une date
-$logs = $logger->stream('2026-04-05');
+use AndyDefer\Logger\Services\LogPathService;
+use AndyDefer\Logger\Tasks\StreamLogsTask;
+
+$pathService = new LogPathService(LoggerConfig::default());
+$streamTask = new StreamLogsTask($pathService);
+
+// Tous les logs d'une date spécifique
+$logs = $streamTask->execute('2026-04-05');
 
 // Tous les logs du jour
-$logs = $logger->stream();
+$logs = $streamTask->execute();
 
 foreach ($logs as $log) {
     echo $log->time . ' - ' . $log->level->value . ' - ' . $log->data->type . "\n";
@@ -639,9 +717,9 @@ foreach ($logs as $log) {
 
 ---
 
-## 13. Cas d'usage métier
+## 14. Cas d'usage métier
 
-### 13.1 Log d'authentification
+### 14.1 Log d'authentification
 
 ```php
 // Connexion réussie
@@ -657,7 +735,7 @@ $payload->add('user_login_failed', $credentials['email'], request()->ip(), false
 $logger->warning(new LogDataRecord(type: 'auth', payload: $payload));
 ```
 
-### 13.2 Log de paiement
+### 14.2 Log de paiement
 
 ```php
 // Paiement initié
@@ -679,16 +757,24 @@ $payload->add('payment_failed', $order->id, $exception->getCode(), $exception->g
 $logger->error(new LogDataRecord(type: 'payment', payload: $payload));
 ```
 
-### 13.3 Log avec Record métier
+### 14.3 Log avec Record métier
 
 ```php
-use AndyDefer\BestPractices\Records\AbstractRecord;
-use AndyDefer\BestPractices\Tests\Fixtures\Records\TestUserRecord;
+use AndyDefer\Records\AbstractRecord;
 
-// Utilisation du Record de fixture existant
-$userRecord = new TestUserRecord(
-    name: 'John Doe',
-    email: 'john@example.com',
+final class UserContextRecord extends AbstractRecord
+{
+    public function __construct(
+        public readonly int $id,
+        public readonly string $email,
+        public readonly string $role,
+    ) {}
+}
+
+$userRecord = new UserContextRecord(
+    id: $user->id,
+    email: $user->email,
+    role: $user->role,
 );
 
 $payload = new MixedPayloadCollection();
@@ -697,10 +783,12 @@ $payload->add('user_created', $userRecord, true);
 $logger->info(new LogDataRecord(type: 'user', payload: $payload));
 ```
 
-### 13.4 Log avec collection imbriquée
+### 14.4 Log avec collection imbriquée
 
 ```php
-$tags = new TypedRecords('string');
+use AndyDefer\Records\Collections\TypedCollection;
+
+$tags = new TypedCollection('string');
 $tags->add('premium', 'vip', 'active');
 
 $payload = new MixedPayloadCollection();
@@ -709,7 +797,7 @@ $payload->add('user_tags', $tags, $userId);
 $logger->info(new LogDataRecord(type: 'user', payload: $payload));
 ```
 
-### 13.5 Log d'erreur système
+### 14.5 Log d'erreur système
 
 ```php
 try {
@@ -724,7 +812,7 @@ try {
 }
 ```
 
-### 13.6 Log d'API externe
+### 14.6 Log d'API externe
 
 ```php
 // Appel API sortant
@@ -742,9 +830,19 @@ $logger->info(new LogDataRecord(type: 'api', payload: $payload));
 
 ---
 
-## 14. Tests
+## 15. Tests
 
-### 14.1 Mock du Logger pour les tests unitaires
+### 15.1 Pourquoi les tests sont plus fiables avec notre Logger
+
+| Aspect | Laravel native | Notre Logger |
+|--------|----------------|--------------|
+| **Assertion sur le contenu** | `assertStringContainsString('User 123', $log)` | `assertTrue($log->data->payload->contains(123))` |
+| **Assertion sur les types** | Impossible | `assertInstanceOf(MixedPayloadCollection::class, $log->data->payload)` |
+| **Mock du logger** | Mock du message textuel fragile | Mock de l'objet typé stable |
+| **Refactoring** | Changer la formulation casse les tests | Changer la formulation n'affecte pas les tests |
+| **Validation des données** | Impossible | `$log->data->payload->assertAllOfType('int')` |
+
+### 15.2 Mock du Logger pour les tests unitaires
 
 ```php
 <?php
@@ -753,9 +851,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Services\User;
 
-use AndyDefer\BestPractices\Logger\Contracts\LoggerInterface;
-use AndyDefer\BestPractices\Logger\Collections\MixedPayloadCollection;
-use AndyDefer\BestPractices\Logger\Records\LogDataRecord;
+use AndyDefer\Logger\Contracts\LoggerInterface;
+use AndyDefer\Logger\Collections\MixedPayloadCollection;
+use AndyDefer\Logger\Records\LogDataRecord;
 use App\Services\User\UserService;
 use Tests\TestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -765,140 +863,237 @@ final class UserServiceTest extends TestCase
 {
     public function test_login_logs_successful_authentication(): void
     {
+        // Arrange
         $logger = $this->createMock(LoggerInterface::class);
         
+        // Assert & Expect
         $logger->expects($this->once())
             ->method('info')
             ->with($this->callback(function ($logData) {
                 return $logData instanceof LogDataRecord
-                    && $logData->type === 'user_login'
-                    && $logData->payload->contains(1);
+                    && $logData->type === 'auth'
+                    && $logData->payload->contains('user_login')
+                    && $logData->payload->contains(123)
+                    && $logData->payload->contains('127.0.0.1');
             }));
         
+        // Act
         $service = new UserService($logger);
-        $service->login(new LoginUserRecord(userId: 1, ip: '127.0.0.1'));
+        $service->login(123, '127.0.0.1');
+    }
+    
+    public function test_login_logs_failed_authentication_with_warning_level(): void
+    {
+        // Arrange
+        $logger = $this->createMock(LoggerInterface::class);
+        
+        // Assert & Expect - Vérification du niveau de log
+        $logger->expects($this->once())
+            ->method('warning')
+            ->with($this->callback(function ($logData) {
+                return $logData->type === 'auth'
+                    && $logData->payload->contains('user_login_failed')
+                    && $logData->payload->contains('wrong_password');
+            }));
+        
+        // Act
+        $service = new UserService($logger);
+        $service->loginFailed('user@example.com', 'wrong_password');
+    }
+    
+    public function test_log_payload_maintains_type_safety(): void
+    {
+        // Arrange
+        $logger = $this->createMock(LoggerInterface::class);
+        
+        // Assert & Expect - Vérification des types dans le payload
+        $logger->expects($this->once())
+            ->method('info')
+            ->with($this->callback(function ($logData) {
+                // Vérification que le payload a le bon type
+                return $logData->payload instanceof MixedPayloadCollection
+                    && $logData->payload->count() === 4
+                    && $logData->payload->isAllScalars(); // Tous les éléments sont scalaires
+            }));
+        
+        // Act
+        $service = new UserService($logger);
+        $service->logUserAction(123, 'login', '127.0.0.1', true);
     }
 }
 ```
----
 
-## 15. Helpers autorisés (constantes uniquement)
-
-⚠️ **Les helpers sont autorisés UNIQUEMENT pour retourner des valeurs scalaires immuables**
+### 15.3 Test d'intégration avec fichier réel
 
 ```php
-// src/Logger/helpers.php
-use AndyDefer\BestPractices\Logger\Config\LoggerConfig;
+<?php
 
-if (!function_exists('logger_default_path')) {
-    function logger_default_path(): string
-    {
-        return LoggerConfig::default()->basePath;
-    }
-}
+declare(strict_types=1);
 
-if (!function_exists('logger_retention_days')) {
-    function logger_retention_days(): int
-    {
-        return LoggerConfig::default()->retentionDays;
-    }
-}
-```
+namespace Tests\Integration\Logger;
 
-**Enregistrement dans `composer.json` :**
+use AndyDefer\Logger\Logger;
+use AndyDefer\Logger\Config\LoggerConfig;
+use AndyDefer\Logger\Collections\MixedPayloadCollection;
+use AndyDefer\Logger\Records\LogDataRecord;
+use AndyDefer\Logger\Records\LogQueryRecord;
+use AndyDefer\Logger\Enums\LogLevel;
+use Orchestra\Testbench\TestCase;
 
-```json
+final class LoggerIntegrationTest extends TestCase
 {
-    "autoload": {
-        "psr-4": {
-            "AndyDefer\\BestPractices\\": "src/"
-        },
-        "files": [
-            "src/Logger/helpers.php"
-        ]
+    private string $testLogPath;
+    private Logger $logger;
+    
+    protected function setUp(): void
+    {
+        parent::setUp();
+        
+        // Arrange: Créer un chemin de test temporaire
+        $this->testLogPath = sys_get_temp_dir() . '/logger_test_' . uniqid();
+        
+        $config = LoggerConfig::default()
+            ->withBasePath($this->testLogPath)
+            ->withRetentionDays(1);
+        
+        $this->logger = new Logger($config);
+    }
+    
+    protected function tearDown(): void
+    {
+        // Nettoyage: Supprimer les fichiers de test
+        if (is_dir($this->testLogPath)) {
+            $this->deleteDirectory($this->testLogPath);
+        }
+        
+        parent::tearDown();
+    }
+    
+    public function test_log_is_written_and_readable(): void
+    {
+        // Arrange: Créer un log
+        $payload = new MixedPayloadCollection();
+        $payload->add('test_event', 42, 'hello');
+        $logData = new LogDataRecord(type: 'test', payload: $payload);
+        
+        // Act: Écrire le log
+        $this->logger->info($logData);
+        
+        // Assert: Lire et vérifier le log
+        $query = new LogQueryRecord(
+            type: 'test',
+            level: LogLevel::INFO,
+        );
+        
+        $results = $this->logger->query($query);
+        
+        $this->assertCount(1, $results);
+        $this->assertSame('test', $results[0]->data->type);
+        $this->assertTrue($results[0]->data->payload->contains(42));
+        $this->assertTrue($results[0]->data->payload->contains('hello'));
+        $this->assertSame(LogLevel::INFO, $results[0]->level);
+    }
+    
+    public function test_log_levels_are_respected(): void
+    {
+        // Arrange: Créer plusieurs logs avec différents niveaux
+        $payload = new MixedPayloadCollection();
+        $payload->add('event');
+        
+        $logData = new LogDataRecord(type: 'debug_event', payload: $payload);
+        
+        // Act: Écrire à différents niveaux
+        $this->logger->debug($logData);
+        $this->logger->info($logData);
+        $this->logger->warning($logData);
+        $this->logger->error($logData);
+        
+        // Assert: Vérifier les comptages par niveau
+        $debugCount = $this->logger->query(new LogQueryRecord(level: LogLevel::DEBUG))->count();
+        $infoCount = $this->logger->query(new LogQueryRecord(level: LogLevel::INFO))->count();
+        $warningCount = $this->logger->query(new LogQueryRecord(level: LogLevel::WARNING))->count();
+        $errorCount = $this->logger->query(new LogQueryRecord(level: LogLevel::ERROR))->count();
+        
+        $this->assertSame(1, $debugCount);
+        $this->assertSame(1, $infoCount);
+        $this->assertSame(1, $warningCount);
+        $this->assertSame(1, $errorCount);
+    }
+    
+    private function deleteDirectory(string $dir): void
+    {
+        $files = array_diff(scandir($dir), ['.', '..']);
+        foreach ($files as $file) {
+            $path = $dir . '/' . $file;
+            is_dir($path) ? $this->deleteDirectory($path) : unlink($path);
+        }
+        rmdir($dir);
     }
 }
 ```
 
 ---
 
-## 16. Gestion des erreurs
+## 16. Enregistrement dans Laravel
 
-### 16.1 Exceptions
+### 16.1 Service Provider
 
-| Exception | Condition |
-|-----------|-----------|
-| `RuntimeException` | Impossible de créer le dossier ou d'écrire dans le fichier |
-| `InvalidArgumentException` | Type non autorisé dans le payload |
-
-### 16.2 Exemple de gestion
+Le Service Provider est automatiquement enregistré par le package :
 
 ```php
-use RuntimeException;
-use InvalidArgumentException;
+// Le package enregistre automatiquement :
+AndyDefer\Logger\LoggerServiceProvider::class
+```
 
-try {
-    $payload = new MixedPayloadCollection();
-    $payload->add('user_login', $userId, $ip);
+### 16.2 Injection automatique
+
+```php
+// Dans n'importe quelle classe Laravel
+use AndyDefer\Logger\Contracts\LoggerInterface;
+
+final class UserController extends Controller
+{
+    public function __construct(
+        private readonly LoggerInterface $logger,
+    ) {}
     
-    $logData = new LogDataRecord(type: 'user_login', payload: $payload);
-    $logger->info($logData);
-    
-} catch (InvalidArgumentException $e) {
-    // Le payload contient un type non autorisé
-    error_log('Invalid log payload: ' . $e->getMessage());
-    
-} catch (RuntimeException $e) {
-    // Le logger a échoué (disque plein, permissions)
-    error_log('Logger failed: ' . $e->getMessage());
+    public function login(Request $request)
+    {
+        // ...
+        $this->logger->info($logData);
+        // ...
+    }
 }
 ```
 
 ---
 
-## 17. Enregistrement dans Laravel
+## 17. Bonnes pratiques
 
-### 17.1 Via le package principal
-
-Le Service Provider du Logger est automatiquement enregistré par `BestPracticesServiceProvider`.
-
-### 17.2 Enregistrement manuel (optionnel)
+### 17.1 Structure du payload
 
 ```php
-// config/app.php
-'providers' => [
-    // ...
-    AndyDefer\BestPractices\Logger\Providers\LoggerServiceProvider::class,
-],
-```
-
----
-
-## 18. Bonnes pratiques
-
-### 18.1 Structure du payload
-
-```php
-// ✅ Premier élément = type d'événement
+// ✅ Premier élément = type d'événement (pour faciliter le filtrage)
 $payload->add('user_login', $userId, $ip, $success);
 
 // ❌ Ordre incohérent
 $payload->add($userId, 'user_login', $ip);
 ```
 
-### 18.2 Noms de type cohérents
+### 17.2 Noms de type cohérents
 
 ```php
-// ✅ snake_case
+// ✅ snake_case pour les types d'événements
 'type' => 'user_login'
 'type' => 'payment_failed'
+'type' => 'api_call'
 
 // ❌ Formats inconsistants
 'type' => 'userLogin'
 'type' => 'UserLogin'
 ```
 
-### 18.3 Versionnement par position
+### 17.3 Versionnement par position
 
 ```php
 // Version 1 : 3 éléments
@@ -908,7 +1103,7 @@ $payload->add('user_login', $userId, $ip);
 $payload->add('user_login', $userId, $ip, $userAgent);
 ```
 
-### 18.4 Chaînage
+### 17.4 Chaînage
 
 ```php
 // ✅ Chaînage fluide
@@ -918,7 +1113,7 @@ $payload->add('user_login')->add($userId)->add($ip)->add($success);
 $payload->add('user_login', $userId, $ip, $success);
 ```
 
-### 18.5 Injection de dépendance uniquement
+### 17.5 Injection de dépendance uniquement
 
 ```php
 // ✅ Injection explicite
@@ -929,11 +1124,12 @@ final class UserService
     ) {}
 }
 
-// ❌ Pas de helper
+// ❌ Pas de helper global ou facade
 logger()->info(...);
+Log::info(...);
 ```
 
-### 18.6 Timestamp automatique
+### 17.6 Timestamp automatique
 
 ```php
 // ✅ Le timestamp est automatique
@@ -943,11 +1139,25 @@ $logger->info($logData);
 $logger->info(now()->toIso8601ZuluString(), $logData);
 ```
 
+### 17.7 Tests robustes
+
+```php
+// ✅ Tester la structure, pas le texte
+$logger->expects($this->once())
+    ->method('info')
+    ->with($this->callback(fn($log) => $log->payload->contains(123)));
+
+// ❌ Tester du texte qui peut changer
+$logger->expects($this->once())
+    ->method('info')
+    ->with('User 123 logged in');
+```
+
 ---
 
-## 19. Règle d'or
+## 18. Règle d'or
 
-> **ZÉRO appel statique. TOUTES les dépendances injectées. Le payload ne contient que des scalaires, des Records, des TypedRecords ou des stdClass. Le timestamp est automatique.**
+> **ZÉRO appel statique. TOUTES les dépendances injectées. Le payload ne contient que des scalaires, des Records, des TypedCollection ou des stdClass. Le timestamp est automatique. Les tests vérifient la STRUCTURE, pas le TEXTE.**
 
 ```php
 // ✅ Le log parfait
@@ -957,4 +1167,14 @@ $payload->add('user_login', $userId, $ip, $success);
 $logger->info(new LogDataRecord(type: 'auth', payload: $payload));
 ```
 
-> **Rappel final : STRUCTURÉ + SÉCURISÉ + REQUÊTABLE + TESTABLE + INJECTION = MAINTENABILITÉ**
+```php
+// ✅ Le test parfait
+$logger->expects($this->once())
+    ->method('info')
+    ->with($this->callback(fn($log) => 
+        $log->type === 'auth' 
+        && $log->payload->contains($userId)
+        && $log->payload->contains($ip)
+    ));
+```
+> **Rappel final : STRUCTURÉ + TYPÉ + REQUÊTABLE + TESTABLE + INJECTION = MAINTENABILITÉ**
