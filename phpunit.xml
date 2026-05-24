@@ -5,17 +5,7 @@
     bootstrap="vendor/autoload.php"
     colors="true"
 >
-    <testsuites>
-        <!-- Tests Unitaires du Logger -->
-        <testsuite name="Logger Unit">
-            <directory suffix="Test.php">./tests/Logger/Unit</directory>
-        </testsuite>
-        
-        <!-- Tests d'Intégration du Logger -->
-        <testsuite name="Logger Feature">
-            <directory suffix="Test.php">./tests/Logger/Feature</directory>
-        </testsuite>
-        
+    <testsuites>    
         <!-- Tests Unitaires généraux (pour compatibilité) -->
         <testsuite name="Unit">
             <directory suffix="Test.php">./tests/Unit</directory>
@@ -45,10 +35,6 @@
         <!-- Optimisations pour les tests -->
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="HASH_VERIFY" value="false"/>
-        
-        <!-- Configuration spécifique pour le Logger -->
-        <env name="LOGGER_PATH" value="/tmp/logger_tests"/>
-        <env name="LOGGER_RETENTION_DAYS" value="7"/>
         
     </php>
     
