@@ -38,7 +38,7 @@ final class AuthenticateMiddleware
 
 ---
 
-## 3. Configuration des Middlewares (⚠️ NOUVELLE SYNTAXE LARAVEL 11+)
+## 3. Configuration des Middlewares
 
 > **⚠️ Les middlewares se configurent désormais dans le fichier `bootstrap/app.php` avec la nouvelle syntaxe Laravel 11+.**
 
@@ -100,20 +100,44 @@ return Application::configure(basePath: dirname(__DIR__))
 })
 ```
 
-### 3.2 Utilisation dans les routes
+### 3.2 Utilisation dans les routes avec ActionRoute
 
 ```php
-// routes/web.php
-Route::get('/dashboard', fn() => ...)->middleware('auth');
-Route::get('/admin', fn() => ...)->middleware(['auth', 'check.status']);
-
 // routes/api.php
-Route::get('/users', fn() => ...)->middleware('throttle:60,1');
-Route::post('/data', fn() => ...)->middleware(['auth', 'cors']);
+use AndyDefer\Actions\Support\ActionRoute;
 
-// Avec paramètres (séparés par ':')
-Route::get('/api/data', fn() => ...)->middleware('throttle:60,1');
-Route::get('/api/admin', fn() => ...)->middleware('check.status:banned');
+// Middleware simple sur une route
+ActionRoute::get('/users', ListUsersRequest::class, ListUsersAction::class)
+    ->middleware('auth');
+
+// Middleware avec paramètres
+ActionRoute::get('/users/{id}', GetUserRequest::class, GetUserAction::class)
+    ->middleware('throttle:60,1');
+
+// Groupe de middlewares
+ActionRoute::post('/users', CreateUserRequest::class, CreateUserAction::class)
+    ->middleware(['auth', 'cors']);
+
+// Middleware avec paramètres personnalisés
+ActionRoute::get('/admin/users', AdminListUsersRequest::class, AdminListUsersAction::class)
+    ->middleware('check.status:banned');
+```
+
+### 3.3 Groupe de middlewares
+
+```php
+// routes/api.php
+Route::prefix('admin')->middleware(['auth', 'check.status'])->group(function () {
+    ActionRoute::get('/users', AdminListUsersRequest::class, AdminListUsersAction::class);
+    ActionRoute::post('/users', AdminCreateUserRequest::class, AdminCreateUserAction::class);
+    ActionRoute::delete('/users/{id}', AdminDeleteUserRequest::class, AdminDeleteUserAction::class);
+});
+
+// Groupe avec middleware paramétré
+Route::prefix('api')->middleware('throttle:60,1')->group(function () {
+    ActionRoute::get('/products', ListProductsRequest::class, ListProductsAction::class);
+    ActionRoute::get('/products/{id}', GetProductRequest::class, GetProductAction::class);
+});
 ```
 
 ---
@@ -143,7 +167,7 @@ final class CheckUserSubscriptionMiddleware
 {
     public function handle(Request $request, Closure $next): Response
     {
-        // ❌ Logique métier - devrait être dans un Service/Task
+        // ❌ Logique métier - devrait être dans un Service
         $user = $this->userRepository->find($request->user()->id);
         if ($user->subscription_ends_at < now()) {
             return redirect('/subscribe');
@@ -225,7 +249,7 @@ final class CheckUserStatusMiddleware
 
 ### 4.4 Logique complexe
 
-> **⚠️ Si un middleware a besoin d'effectuer plusieurs actions (ex: vérification + logging + notification), il DOIT déléguer à une Task.**
+> **⚠️ Si un middleware a besoin d'effectuer plusieurs actions (ex: vérification + logging + notification), il DOIT déléguer à un Service.**
 
 ```php
 // ❌ MAUVAIS - Middleware avec plusieurs actions
@@ -247,12 +271,12 @@ final class CheckUserStatusMiddleware
     }
 }
 
-// ✅ BON - Délégation à une Task
+// ✅ BON - Délégation à un Service
 final class CheckUserStatusMiddleware
 {
     public function __construct(
         private readonly UserRepository $userRepository,
-        private readonly HandleBannedUserTask $handleBannedUser,
+        private readonly BannedUserService $bannedUserService,
     ) {}
     
     public function handle(Request $request, Closure $next): Response
@@ -260,7 +284,7 @@ final class CheckUserStatusMiddleware
         $user = $this->userRepository->find($request->user()->id);
         
         if ($user->status->isBanned()) {
-            $this->handleBannedUser->execute(new HandleBannedUserRecord(
+            $this->bannedUserService->handle(new BannedUserRecord(
                 userId: $user->id,
                 ip: $request->ip(),
                 url: $request->fullUrl(),
@@ -340,9 +364,6 @@ final class ThrottleMiddleware
         return $next($request);
     }
 }
-
-// Utilisation
-Route::get('/api/users', fn() => ...)->middleware('throttle:60,1');
 ```
 
 ---
@@ -420,7 +441,7 @@ app/Http/Middleware/
 | Nettoyer les données d'entrée | ✅ Oui |
 | Interrompre la requête | ✅ Oui |
 | Utiliser des Repositories | ✅ Oui |
-| Utiliser des Tasks (1 action) | ✅ Oui |
+| Utiliser des Services (1 action) | ✅ Oui |
 | Utiliser les méthodes des Enums | ✅ Oui |
 
 ---
@@ -429,13 +450,13 @@ app/Http/Middleware/
 
 | Action | Pourquoi | Alternative |
 |--------|----------|-------------|
-| **Logique métier** | Violation SRP | Service/Task |
+| **Logique métier** | Violation SRP | Service |
 | **Accès direct aux Models** | Violation abstraction | Repository |
-| **Transactions DB** | Rôle des Tasks | Task |
-| **Envoi d'emails** | Rôle des Tasks | Task |
+| **Transactions DB** | Rôle des Services | Service |
+| **Envoi d'emails** | Rôle des Services | Service |
 | **Calculs métier** | Violation SRP | Service |
 | **Validation métier** | Rôle Form Request | Form Request |
-| **Plusieurs actions** | Violation SRP | Task unique |
+| **Plusieurs actions** | Violation SRP | Service unique |
 
 ```php
 // ❌ MAUVAIS
@@ -460,7 +481,7 @@ final class CheckUserSubscriptionMiddleware
 {
     public function __construct(
         private readonly UserRepository $repository,
-        private readonly HandleExpiredSubscriptionTask $task,
+        private readonly ExpiredSubscriptionService $service,
     ) {}
     
     public function handle(Request $request, Closure $next): Response
@@ -468,7 +489,7 @@ final class CheckUserSubscriptionMiddleware
         $user = $this->repository->find($request->user()->id);
         
         if ($user->subscription_ends_at < now()) {
-            $this->task->execute(new HandleExpiredSubscriptionRecord(
+            $this->service->handle(new ExpiredSubscriptionRecord(
                 userId: $user->id,
                 ip: $request->ip(),
             ));
@@ -505,7 +526,7 @@ final class LogRequestMiddleware
 
 ---
 
-## 10. Exemples complets
+## 10. Exemples complets avec ActionRoute
 
 ### 10.1 Middleware d'authentification
 
@@ -537,7 +558,16 @@ final class AuthenticateMiddleware
 }
 ```
 
-### 10.2 Middleware avec Repository et Task
+**Utilisation avec ActionRoute :**
+```php
+// routes/api.php
+use AndyDefer\Actions\Support\ActionRoute;
+
+ActionRoute::get('/users/profile', GetProfileRequest::class, GetProfileAction::class)
+    ->middleware('auth');
+```
+
+### 10.2 Middleware avec Repository et Service
 
 ```php
 <?php
@@ -547,7 +577,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Repositories\UserRepository;
-use App\Tasks\HandleBannedUserTask;
+use App\Services\BannedUserService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -556,7 +586,7 @@ final class CheckUserStatusMiddleware
 {
     public function __construct(
         private readonly UserRepository $userRepository,
-        private readonly HandleBannedUserTask $handleBannedUser,
+        private readonly BannedUserService $bannedUserService,
     ) {}
     
     public function handle(Request $request, Closure $next): Response
@@ -564,7 +594,7 @@ final class CheckUserStatusMiddleware
         $user = $this->userRepository->find($request->user()->id);
         
         if ($user->status->isBanned()) {
-            $this->handleBannedUser->execute(new HandleBannedUserRecord(
+            $this->bannedUserService->handle(new BannedUserRecord(
                 userId: $user->id,
                 ip: $request->ip(),
                 url: $request->fullUrl(),
@@ -580,6 +610,15 @@ final class CheckUserStatusMiddleware
         return $next($request);
     }
 }
+```
+
+**Utilisation avec ActionRoute :**
+```php
+// routes/api.php
+use AndyDefer\Actions\Support\ActionRoute;
+
+ActionRoute::get('/admin/users', AdminListUsersRequest::class, AdminListUsersAction::class)
+    ->middleware(['auth', 'check.status']);
 ```
 
 ### 10.3 Middleware CORS
@@ -614,6 +653,45 @@ final class CorsMiddleware
 }
 ```
 
+**Utilisation avec ActionRoute :**
+```php
+// routes/api.php
+use AndyDefer\Actions\Support\ActionRoute;
+
+Route::prefix('api')->middleware('cors')->group(function () {
+    ActionRoute::get('/public-data', GetPublicDataRequest::class, GetPublicDataAction::class);
+    ActionRoute::post('/webhook', WebhookRequest::class, WebhookAction::class);
+});
+```
+
+### 10.4 Groupe de middlewares avec ActionRoute
+
+```php
+// routes/api.php
+use AndyDefer\Actions\Support\ActionRoute;
+
+// Groupe avec authentification et vérification de statut
+Route::prefix('admin')->middleware(['auth', 'check.status'])->group(function () {
+    ActionRoute::get('/users', AdminListUsersRequest::class, AdminListUsersAction::class);
+    ActionRoute::post('/users', AdminCreateUserRequest::class, AdminCreateUserAction::class);
+    ActionRoute::put('/users/{id}', AdminUpdateUserRequest::class, AdminUpdateUserAction::class);
+    ActionRoute::delete('/users/{id}', AdminDeleteUserRequest::class, AdminDeleteUserAction::class);
+});
+
+// Groupe avec throttling
+Route::prefix('api')->middleware('throttle:60,1')->group(function () {
+    ActionRoute::get('/products', ListProductsRequest::class, ListProductsAction::class);
+    ActionRoute::get('/products/{id}', GetProductRequest::class, GetProductAction::class);
+    ActionRoute::post('/orders', CreateOrderRequest::class, CreateOrderAction::class);
+});
+
+// Groupe avec middleware paramétré
+Route::prefix('moderator')->middleware('check.status:moderator')->group(function () {
+    ActionRoute::get('/reports', ListReportsRequest::class, ListReportsAction::class);
+    ActionRoute::post('/reports/{id}/resolve', ResolveReportRequest::class, ResolveReportAction::class);
+});
+```
+
 ---
 
 ## 11. Récapitulatif des contraintes
@@ -625,7 +703,7 @@ final class CorsMiddleware
 | **Paramètres** | Séparés par `:`, en `snake_case` |
 | **Logique métier** | ❌ Interdit |
 | **Accès direct aux Models** | ❌ Interdit |
-| **Plusieurs actions** | ❌ Interdit (déléguer à Task) |
+| **Plusieurs actions** | ❌ Interdit (déléguer à Service) |
 | **Transactions DB** | ❌ Interdit |
 | **Emails / Notifications** | ❌ Interdit |
 | **Validation métier** | ❌ Interdit |
@@ -634,14 +712,14 @@ final class CorsMiddleware
 | **Headers** | ✅ Autorisé |
 | **Throttling** | ✅ Autorisé |
 | **Repositories** | ✅ Autorisé |
-| **Tasks (1 action)** | ✅ Autorisé |
+| **Services (1 action)** | ✅ Autorisé |
 | **Méthodes des Enums** | ✅ Autorisé |
 
 ---
 
 ## 12. Règle d'or
 
-> **Un middleware ne fait que des tâches transversales techniques. Pas de logique métier. Pas d'accès direct aux Models. Les actions complexes sont déléguées à des Tasks. Les alias sont en `dot.case`. Utilisez les méthodes des Enums (`isBanned()`) plutôt que les valeurs brutes.**
+> **Un middleware ne fait que des tâches transversales techniques. Pas de logique métier. Pas d'accès direct aux Models. Les actions complexes sont déléguées à des Services. Les alias sont en `dot.case`. Utilisez les méthodes des Enums (`isBanned()`) plutôt que les valeurs brutes. Les middlewares s'appliquent aux routes via `->middleware()` ou des groupes sur ActionRoute.**
 
 ```php
 // Le middleware parfait
@@ -649,7 +727,7 @@ final class PerfectMiddleware
 {
     public function __construct(
         private readonly SomeRepository $repository,
-        private readonly SomeTask $task,
+        private readonly SomeService $service,
     ) {}
     
     public function handle(Request $request, Closure $next): Response
@@ -657,7 +735,7 @@ final class PerfectMiddleware
         $user = $this->repository->find($request->user()->id);
         
         if ($user->status->isBanned()) {
-            $this->task->execute(new SomeRecord(
+            $this->service->handle(new SomeRecord(
                 userId: $user->id,
                 ip: $request->ip(),
             ));
@@ -675,6 +753,13 @@ final class PerfectMiddleware
 // Alias
 $middleware->alias(['perfect' => PerfectMiddleware::class]);
 
-// Utilisation
-Route::get('/api/data', fn() => ...)->middleware('perfect');
+// Utilisation avec ActionRoute
+ActionRoute::get('/api/protected-data', GetProtectedRequest::class, GetProtectedAction::class)
+    ->middleware('perfect');
+
+// Groupe de middlewares
+Route::middleware(['auth', 'perfect'])->group(function () {
+    ActionRoute::get('/admin/dashboard', DashboardRequest::class, DashboardAction::class);
+    ActionRoute::get('/admin/reports', ReportsRequest::class, ReportsAction::class);
+});
 ```
