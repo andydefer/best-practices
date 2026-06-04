@@ -385,7 +385,7 @@ final class UserData extends AbstractData
         public readonly string $userRole,
     ) {}
     
-    public static function fromRecord(UserRecord $record): self
+    public static function from(UserRecord $record): self
     {
         return new self(
             userId: $record->user_id,
@@ -414,7 +414,7 @@ $admins = $users->getAdmins();
 
 // Transformation Record → Data
 $usersData = $users->mapToType(
-    fn(UserRecord $record) => UserData::fromRecord($record),
+    fn(UserRecord $record) => UserData::from($record),
     UserDataCollection::class
 );
 ```

@@ -354,7 +354,7 @@ final class ShowDashboardAction extends AbstractAction
     protected function handle(AbstractRecord $request): ResponseFactory
     {
         $dashboardRecord = $this->dashboardService->getDashboard($request);
-        $dashboardData = DashboardData::fromRecord($dashboardRecord);
+        $dashboardData = DashboardData::from($dashboardRecord);
         
         return ResponseFactory::json($dashboardData);
     }

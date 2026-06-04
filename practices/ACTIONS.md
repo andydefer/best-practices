@@ -316,16 +316,6 @@ final class UserData extends AbstractData
         public readonly string $userEmail,
         public readonly EmailAddress $emailAddress,  // Value Object en camelCase
     ) {}
-    
-    public static function fromRecord(UserRecord $record): self
-    {
-        return new self(
-            userId: $record->user_id,
-            userName: $record->user_name,
-            userEmail: $record->user_email,
-            emailAddress: EmailAddress::from(['value' => $record->user_email]),
-        );
-    }
 }
 ```
 
@@ -534,20 +524,11 @@ final class UserData extends AbstractData
         public readonly string $userEmail,
     ) {}
     
-    public static function fromRecord(UserRecord $record): self
-    {
-        return new self(
-            userId: $record->user_id,
-            userName: $record->user_name,
-            userEmail: $record->user_email,
-        );
-    }
-    
     public static function collect(iterable $records): array
     {
         $result = [];
         foreach ($records as $record) {
-            $result[] = self::fromRecord($record);
+            $result[] = self::from($record);
         }
         return $result;
     }
@@ -595,7 +576,7 @@ final class CreateUserAction extends AbstractAction
         /** @var CreateUserRecord $request */
         $user = $this->userRepository->create($request);
         
-        return ResponseFactory::json(UserData::fromRecord($user), 201);
+        return ResponseFactory::json(UserData::from($user), 201);
     }
 }
 ```
@@ -785,7 +766,7 @@ final class CreateOrderAction extends AbstractAction
         // Création en base (Repository)
         $order = $this->orderRepository->create($request, $total);
         
-        return ResponseFactory::json(OrderData::fromRecord($order), 201);
+        return ResponseFactory::json(OrderData::from($order), 201);
     }
 }
 
@@ -806,15 +787,6 @@ final class OrderData extends AbstractData
         public readonly float $orderTotal,
         public readonly string $orderStatus,
     ) {}
-    
-    public static function fromRecord(OrderRecord $record): self
-    {
-        return new self(
-            orderId: $record->order_id,
-            orderTotal: $record->order_total,
-            orderStatus: $record->order_status,
-        );
-    }
 }
 
 // Enregistrement de la route

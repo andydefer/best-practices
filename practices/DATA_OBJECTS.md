@@ -562,16 +562,6 @@ final class UserData extends AbstractData
         public readonly string $userEmail,
         public readonly string $userRole,
     ) {}
-    
-    public static function fromRecord(UserRecord $record): self
-    {
-        return new self(
-            userId: $record->user_id,
-            userName: $record->user_name,
-            userEmail: $record->user_email,
-            userRole: $record->user_role->value,
-        );
-    }
 }
 
 // Hydratation (clés normalisées automatiquement)
@@ -603,7 +593,7 @@ class UserController
         $saved = $this->userRepository->save($user);
         
         // Transformation en Data (camelCase) pour la réponse
-        $userData = UserData::fromRecord($saved);
+        $userData = UserData::from($saved);
         
         return ResponseFactory::json($userData, 201);
     }
@@ -617,7 +607,7 @@ class UserController
         }
         
         // Transformation Record → Data (snake_case → camelCase)
-        $userData = UserData::fromRecord($user);
+        $userData = UserData::from($user);
         
         return ResponseFactory::json($userData);
     }
