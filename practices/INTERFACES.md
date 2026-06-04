@@ -84,7 +84,7 @@ app/Contracts/
 
 ---
 
-## 4. La puissance des interfaces : Likeable et Likerable
+## 4. La puissance des interfaces
 
 > **La véritable puissance des interfaces apparaît quand on conçoit des contrats génériques qui peuvent être implémentés par n'importe quelle entité.**
 
