@@ -243,7 +243,7 @@ concat-all: ## Concatenate all PHP files into all.txt
 		SOURCE_DIRS="$$SOURCE_PATH"; \
 		echo "🔗 Concatenating all PHP files from directory: $${SOURCE_DIRS} into all.txt..."; \
 	fi; \
-	find $${SOURCE_DIRS} -type f -name "*.php" 2>/dev/null -exec sh -c 'echo ""; echo "// ==== {} ==="; echo ""; cat {}' \; > all.txt; \
+	find $${SOURCE_DIRS} -type f -name "*.md" 2>/dev/null -exec sh -c 'echo ""; echo "// ==== {} ==="; echo ""; cat {}' \; > all.txt; \
 	echo "✅ File all.txt generated successfully from: $${SOURCE_DIRS}"
 
 # ---------------------------------------------------
