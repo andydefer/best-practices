@@ -25,7 +25,7 @@ Ce package contient la documentation exhaustive des conventions, bonnes pratique
 |----------|-------------|
 | [practices/records.md](./practices/records.md) | Structures typées pour la communication interne (Services, Repositories, Workers). **⚠️ Les tableaux bruts sont STRICTEMENT INTERDITS : utilisez `TypedRecords`** |
 | [practices/typed-records.md](./practices/typed-records.md) | Collection type-safe qui remplace les tableaux bruts. Méthodes `map()`, `filter()`, `sum()`, `groupBy()`, assertions et collections utilitaires (`StringTypedRecords`, `IntTypedRecords`, `FloatTypedRecords`, `BoolTypedRecords`, `NumberTypedRecords`) |
-| [practices/datas.md](./practices/datas.md) | DTOs purs et immutables pour les réponses API. **⚠️ Création UNIQUEMENT via `fromRecord()`** |
+| [practices/datas.md](./practices/datas.md) | DTOs purs et immutables pour les réponses API. **⚠️ Création UNIQUEMENT via `from()`** |
 | [practices/actions.md](./practices/actions.md) | Composants dédiés à UNE SEULE route. **⚠️ Une Action ne reçoit JAMAIS une Request, elle reçoit un Record** |
 | [practices/services.md](./practices/services.md) | Logique métier pure (calculs, validation) ou services techniques (cache, email). **⚠️ ZÉRO appel statique, TOUTES les dépendances injectées** |
 | [practices/workers.md](./practices/workers.md) | Orchestration d'opérations complexes. **⚠️ ZÉRO transaction, ZÉRO retour de valeur** |
@@ -72,7 +72,7 @@ Ce package contient la documentation exhaustive des conventions, bonnes pratique
 
 | Principe | Règle |
 |----------|-------|
-| **Record → Data** | Un Record ne doit JAMAIS être retourné en réponse API. Utiliser `UserData::fromRecord($record)` |
+| **Record → Data** | Un Record ne doit JAMAIS être retourné en réponse API. Utiliser `UserData::from($record)` |
 | **Une Action = une route** | Pas de réutilisation d'Action pour plusieurs routes |
 | **Type de retour unique** | Une Action ne peut pas retourner `JsonResponse|RedirectResponse` (sauf exception) |
 | **Service ≠ Worker** | Service = logique métier pure, Worker = orchestration d'effets de bord |
