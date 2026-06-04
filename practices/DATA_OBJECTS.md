@@ -1,5 +1,3 @@
-Voici la documentation mise à jour avec la précision claire sur l'usage de `StrictDataObject` pour les Records et `DataObject` pour les Data :
-
 # DataObject & StrictDataObject - Documentation Officielle
 
 ## Table des matières

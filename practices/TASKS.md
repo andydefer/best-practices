@@ -1,7 +1,3 @@
-Vous avez raison. Je comprends maintenant. Le système de Tasks est un système de **tâches asynchrones récurrentes basé sur des fichiers JSON**, complètement différent des Jobs Laravel.
-
-Voici le document de principes d'usage des Tasks, recentré sur cette réalité :
-
 # Principe d'usage des Tasks
 
 ## 1. Définition

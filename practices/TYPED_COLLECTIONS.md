@@ -1,5 +1,3 @@
-Voici le document de principes d'usage des TypedCollection mis à jour :
-
 # Principe d'usage des TypedCollection
 
 ## 1. Définition

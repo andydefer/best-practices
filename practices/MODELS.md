@@ -1,5 +1,3 @@
-Voici votre documentation des Models corrigée avec les bonnes pratiques des Value Objects :
-
 # Principe d'usage des Models (Version finale)
 
 ## 1. Définition

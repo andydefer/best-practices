@@ -1,5 +1,3 @@
-Voici le document de principes d'usage de la Structure mis à jour pour intégrer les nouveaux concepts (Tasks asynchrones, StrictDataObject, etc.) :
-
 # Principe d'usage de la Structure (Version finale)
 
 ## 1. Définition

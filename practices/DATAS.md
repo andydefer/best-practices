@@ -1,5 +1,3 @@
-Voici la version finale du document de principes d'usage des Data DTO, enrichie avec les informations pertinentes de votre version et respectant vos ajustements :
-
 # Principe d'usage des Data DTO
 
 ## 1. Définition

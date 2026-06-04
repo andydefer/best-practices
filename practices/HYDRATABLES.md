@@ -1,5 +1,3 @@
-Voici le document de principes d'usage du trait Hydratable, avec les Records en snake_case :
-
 # Principe d'usage du trait Hydratable
 
 ## 1. Définition

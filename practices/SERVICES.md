@@ -1,5 +1,3 @@
-Voici votre documentation sur les Services mise à jour avec des exemples complets de remplacement de traits et le service parfait :
-
 # Principe d'usage des Services
 
 ## 1. Définition

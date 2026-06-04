@@ -1,5 +1,3 @@
-Voici la documentation des Repositories mise à jour, intégrant la puissance du couplage avec les Services, les Records, le système de normalisation et la composition :
-
 # Principe d'usage des Repositories (Version finale)
 
 ## 1. Définition

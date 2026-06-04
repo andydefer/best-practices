@@ -1,5 +1,3 @@
-Voici la version finale du document de principes d'usage des Config, intégrant toutes les conventions et bonnes pratiques :
-
 # Principe d'usage des Config (Version finale)
 
 ## Table des matières

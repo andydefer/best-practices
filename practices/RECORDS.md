@@ -1,5 +1,3 @@
-Voici votre documentation des Records mise à jour avec les bonnes pratiques :
-
 # Principe d'usage des Records
 
 ## 1. Définition
