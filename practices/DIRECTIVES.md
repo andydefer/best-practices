@@ -1,4 +1,4 @@
-# Principe d'usage des Directives (Version mise à jour)
+# Principe d'usage des Directives (Version finale)
 
 ## 1. Définition
 
@@ -61,25 +61,40 @@ namespace AndyDefer\Directive;
 use AndyDefer\Directive\Collections\ParameterCollection;
 use AndyDefer\Directive\Collections\RowCollection;
 use AndyDefer\Directive\Contracts\DirectiveInterface;
+use AndyDefer\Directive\Enums\ExitCode;
 use AndyDefer\Directive\Records\DirectiveBlueprintRecord;
 use AndyDefer\Directive\Services\DirectiveInteractionService;
 use AndyDefer\Directive\Services\LaravelBootstrapper;
-use AndyDefer\Records\Collections\Utility\StringTypedCollection;
+use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
 
+/**
+ * Abstract base class for all CLI directives.
+ *
+ * This class provides the foundation for creating CLI commands with:
+ * - Argument and option management
+ * - User interaction methods (ask, confirm, line, info, error, warn)
+ * - Table display capabilities
+ * - Optional Laravel bootstrapping
+ *
+ * @author Andy Defer
+ */
 abstract class AbstractDirective implements DirectiveInterface
 {
     protected ParameterCollection $arguments;
     protected ParameterCollection $options;
+    protected ?LaravelBootstrapper $laravelBootstrapper = null;
 
     public function __construct(
         protected readonly DirectiveInteractionService $interaction,
-        protected ?LaravelBootstrapper $laravelBootstrapper = null,
     ) {
-        $this->arguments = new ParameterCollection;
-        $this->options = new ParameterCollection;
+        $this->arguments = new ParameterCollection();
+        $this->options = new ParameterCollection();
     }
 
-    public function getBlueprint(): DirectiveBlueprintRecord
+    /**
+     * Returns the blueprint record for this directive.
+     */
+    final public function getBlueprint(): DirectiveBlueprintRecord
     {
         return new DirectiveBlueprintRecord(
             class: static::class,
@@ -88,80 +103,245 @@ abstract class AbstractDirective implements DirectiveInterface
         );
     }
 
+    /**
+     * Returns the aliases for this directive.
+     */
     public function getAliases(): StringTypedCollection
     {
-        return new StringTypedCollection;
+        return new StringTypedCollection();
     }
 
+    /**
+     * Determines whether Laravel should be bootstrapped before executing this directive.
+     */
     public function shouldBootLaravel(): bool
     {
         return false;
     }
 
-    public function hasLaravel(): bool
+    /**
+     * Checks if Laravel has been bootstrapped and is available.
+     */
+    final public function hasLaravel(): bool
     {
         return $this->laravelBootstrapper !== null && $this->laravelBootstrapper->isBootstrapped();
     }
 
-    public function getLaravel(): ?object
+    /**
+     * Returns the Laravel application instance if available.
+     */
+    final public function getLaravel(): ?object
     {
         return $this->laravelBootstrapper?->getApplication();
     }
 
-    public function setLaravelBootstrapper(?LaravelBootstrapper $bootstrapper): self
+    /**
+     * Sets the Laravel bootstrapper instance.
+     */
+    final public function setLaravelBootstrapper(?LaravelBootstrapper $bootstrapper): self
     {
         $this->laravelBootstrapper = $bootstrapper;
         return $this;
     }
 
-    public function setArguments(ParameterCollection $arguments): self
+    /**
+     * Sets the interaction service instance.
+     */
+    final public function setInteraction(DirectiveInteractionService $interaction): self
+    {
+        $this->interaction = $interaction;
+        return $this;
+    }
+
+    // ==================== Argument Management ====================
+
+    final public function setArguments(ParameterCollection $arguments): self
     {
         $this->arguments = $arguments;
         return $this;
     }
 
-    public function argument(string $key): ?string
+    final public function argument(string $key): ?string
     {
         $value = $this->arguments->get($key);
-        if ($value === null || $value === true || $value === false) {
+        if ($value === null || $value === true || $value === false || $value === '') {
             return null;
         }
         return $value;
     }
 
-    public function setOptions(ParameterCollection $options): self
+    final public function hasArgument(string $key): bool
+    {
+        $value = $this->arguments->get($key);
+        return $value !== null && $value !== '' && $value !== true && $value !== false;
+    }
+
+    // ==================== Option Management ====================
+
+    final public function setOptions(ParameterCollection $options): self
     {
         $this->options = $options;
         return $this;
     }
 
-    public function option(string $key): bool|string|null
+    final public function option(string $key): bool|string|null
     {
-        return $this->options->get($key);
+        $value = $this->options->get($key);
+        if ($value === null || $value === '') {
+            return null;
+        }
+        return $value;
     }
 
-    public function hasOption(string $key): bool
+    final public function hasOption(string $key): bool
     {
-        return $this->options->has($key);
+        $value = $this->options->get($key);
+        if ($value === null || $value === '') {
+            return false;
+        }
+        if (is_bool($value)) {
+            return $value;
+        }
+        return $value !== '';
     }
 
-    abstract public function getSignature(): string;
-    abstract public function getDescription(): string;
+    // ==================== Display Methods ====================
+
+    final public function line(string $message): void
+    {
+        $this->interaction->line($message);
+    }
+
+    final public function info(string $message): void
+    {
+        $this->interaction->info($message);
+    }
+
+    final public function error(string $message): void
+    {
+        $this->interaction->error($message);
+    }
+
+    final public function warn(string $message): void
+    {
+        $this->interaction->warn($message);
+    }
+
+    // ==================== User Interaction Methods ====================
+
+    final public function ask(string $question): string
+    {
+        return $this->interaction->ask($question);
+    }
+
+    final public function confirm(string $question): bool
+    {
+        return $this->interaction->confirm($question);
+    }
+
+    // ==================== Table Display Methods ====================
+
+    final public function table(StringTypedCollection $headers, RowCollection $rows): void
+    {
+        $this->interaction->table($headers, $rows);
+    }
+
+    final public function newLine(): void
+    {
+        $this->interaction->newLine();
+    }
+
+    final public function separator(string $character = '-', int $length = 80): void
+    {
+        $this->interaction->separator($character, $length);
+    }
+
+    /**
+     * Execute the directive's main logic.
+     */
     abstract public function execute(): ExitCode;
 }
 ```
 
-### 2.2. Méthodes d'affichage (via AbstractDirective)
+### 2.2. Méthodes d'affichage et d'interaction (via AbstractDirective)
 
-| Méthode | Description | Couleur |
-|---------|-------------|---------|
-| `line(string $message)` | Message simple | Aucune |
-| `info(string $message)` | Information | Vert |
-| `error(string $message)` | Erreur | Rouge |
-| `warn(string $message)` | Avertissement | Jaune |
-| `ask(string $question)` | Question utilisateur | - |
-| `confirm(string $question)` | Confirmation (booléen) | - |
-| `table(StringTypedCollection $headers, RowCollection $rows)` | Tableau | - |
+| Méthode | Description | Couleur/Type | Paramètres |
+|---------|-------------|--------------|------------|
+| `line(string $message)` | Message simple | Aucune | `$message` - Le message à afficher |
+| `info(string $message)` | Information | Vert | `$message` - Le message à afficher |
+| `error(string $message)` | Erreur | Rouge | `$message` - Le message à afficher |
+| `warn(string $message)` | Avertissement | Jaune | `$message` - Le message à afficher |
+| `newLine()` | Ligne vide | - | Aucun |
+| `separator(string $character = '-', int $length = 80)` | Ligne de séparation | - | `$character` - Caractère de séparation<br>`$length` - Longueur de la ligne |
+| `ask(string $question)` | Question utilisateur | - | `$question` - La question à poser |
+| `confirm(string $question)` | Confirmation (booléen) | - | `$question` - La question de confirmation |
+| `table(StringTypedCollection $headers, RowCollection $rows)` | Affichage tableau formaté | - | `$headers` - En-têtes du tableau<br>`$rows` - Lignes du tableau |
+
+### 2.3. Méthodes de gestion des arguments et options
+
+| Méthode | Description | Retour |
+|---------|-------------|--------|
+| `argument(string $key)` | Récupère la valeur d'un argument | `string\|null` |
+| `hasArgument(string $key)` | Vérifie si un argument existe avec valeur non-vide | `bool` |
+| `option(string $key)` | Récupère la valeur d'une option | `bool\|string\|null` |
+| `hasOption(string $key)` | Vérifie si une option existe avec valeur non-vide | `bool` |
+
+### 2.4. Méthodes de configuration Laravel
+
+| Méthode | Description | Retour |
+|---------|-------------|--------|
+| `shouldBootLaravel()` | Indique si Laravel doit être bootstrappé | `bool` |
+| `hasLaravel()` | Vérifie si Laravel est disponible | `bool` |
+| `getLaravel()` | Récupère l'instance Laravel | `object\|null` |
+
+### 2.5. Méthodes de chaînage (Fluent interface)
+
+| Méthode | Description | Retour |
+|---------|-------------|--------|
+| `setArguments(ParameterCollection $arguments)` | Définit les arguments | `self` |
+| `setOptions(ParameterCollection $options)` | Définit les options | `self` |
+| `setLaravelBootstrapper(?LaravelBootstrapper $bootstrapper)` | Définit le bootstrapper Laravel | `self` |
+| `setInteraction(DirectiveInteractionService $interaction)` | Définit le service d'interaction | `self` |
+
+### 2.6. Exemple d'utilisation complète
+
+```php
+final class UserListDirective extends AbstractDirective
+{
+    public function getSignature(): string
+    {
+        return 'user-list {--role=} {--active}';
+    }
+
+    public function getDescription(): string
+    {
+        return 'List all users with optional filters';
+    }
+
+    public function execute(): ExitCode
+    {
+        $this->separator('=', 50);
+        $this->info('🚀 Démarrage de la commande');
+        
+        $role = $this->option('role');
+        $active = $this->hasOption('active');
+        
+        if (!$role && $this->confirm('Voulez-vous filtrer par rôle ?')) {
+            $role = $this->ask('Quel rôle ?');
+        }
+        
+        $headers = new StringTypedCollection(['ID', 'Nom', 'Rôle']);
+        $rows = new RowCollection();
+        $rows->add(['1', 'John Doe', $role ?? 'user']);
+        $this->table($headers, $rows);
+        
+        $this->newLine();
+        $this->warn('⚠️ Attention : certains utilisateurs sont inactifs');
+        
+        return ExitCode::SUCCESS;
+    }
+}
+```
 
 ---
 
@@ -173,7 +353,7 @@ abstract class AbstractDirective implements DirectiveInterface
 // ✅ BON - Directive dédiée à une commande
 final class UserCreateDirective extends AbstractDirective
 {
-    // Utilisée uniquement pour user:create
+    // Utilisée uniquement pour user-create
 }
 
 // ❌ MAUVAIS - Directive réutilisée pour plusieurs commandes
@@ -281,7 +461,7 @@ public function getSignature(): string
 ### 5.1. Définition des alias
 
 ```php
-use AndyDefer\Records\Collections\Utility\StringTypedCollection;
+use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
 
 public function getAliases(): StringTypedCollection
 {
@@ -339,7 +519,7 @@ final class CacheDirective extends AbstractDirective
 | `./vendor/bin/directive cache-clear` | ✅ Signature originale |
 | `./vendor/bin/directive cc` | ✅ Alias |
 | `./vendor/bin/directive clear-cache` | ✅ Alias |
-| `./vendor/bin/directive cache-clear` | ❌ Erreur (pas un alias) |
+| `./vendor/bin/directive cache-c` | ❌ Erreur (pas un alias) |
 
 ---
 
@@ -432,7 +612,7 @@ namespace App\Directives;
 use AndyDefer\Directive\AbstractDirective;
 use AndyDefer\Directive\Collections\RowCollection;
 use AndyDefer\Directive\Enums\ExitCode;
-use AndyDefer\Records\Collections\Utility\StringTypedCollection;
+use AndyDefer\DomainStructures\Collections\Utility\StringTypedCollection;
 
 final class UserCreateDirective extends AbstractDirective
 {
@@ -456,7 +636,7 @@ final class UserCreateDirective extends AbstractDirective
 
     public function shouldBootLaravel(): bool
     {
-        return true; // Besoin de la base de données
+        return true;
     }
 
     public function execute(): ExitCode
@@ -495,7 +675,7 @@ final class UserCreateDirective extends AbstractDirective
         
         $this->table(
             new StringTypedCollection(['Field', 'Value']),
-            (new RowCollection())->add(new RowCollection(['Name', $name], ['Email', $email]))
+            (new RowCollection())->add(['Name', $name], ['Email', $email])
         );
         
         $this->info("✅ User {$name} created successfully!");
@@ -523,7 +703,7 @@ final class UserCreateDirective extends AbstractDirective
 
 ## 10. Règle : Pas de tests unitaires pour les Directives (⚠️ RÈGLE IMPORTANTE)
 
-> **⚠️ On n'écrit JAMAIS de tests unitaires pour les Directives. Les Directives sont testées exclusivement via des tests d'intégration car elles dépendent de l'input/output.**
+> **⚠️ On n'écrit JAMAIS de tests unitaires pour les Directives. Les Directives sont testées exclusivement via des tests d'intégration.**
 
 ### 10.1. Pourquoi ?
 
@@ -543,7 +723,273 @@ final class UserCreateDirective extends AbstractDirective
 
 ---
 
-## 11. Récapitulatif des contraintes
+## 11. Tests d'intégration des Directives avec InteractsWithDirectives (⚠️ RÈGLE OBLIGATOIRE)
+
+> **⚠️ Pour tester les directives, on utilise OBLIGATOIREMENT le trait `InteractsWithDirectives` qui fournit un environnement de test isolé sans dépendance au système de fichiers réel.**
+
+### 11.1. Pourquoi InteractsWithDirectives ?
+
+| Problème | Solution apportée par le trait |
+|----------|-------------------------------|
+| Dépendance au filesystem | Création d'un environnement temporaire isolé |
+| Dépendance à l'I/O réel | Capture et assertion sur l'output |
+| Bootstrap Laravel | Création d'une structure Laravel minimale |
+| Enregistrement des directives | Registry dédié pour les tests |
+| Nettoyage après test | Suppression automatique des fichiers temporaires |
+
+### 11.2. Structure de base d'un test de directive
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Integration\Directives;
+
+use AndyDefer\Directive\Enums\ExitCode;
+use AndyDefer\Directive\Testing\InteractsWithDirectives;
+use App\Directives\UserCreateDirective;
+use PHPUnit\Framework\TestCase;
+
+final class UserCreateDirectiveTest extends TestCase
+{
+    use InteractsWithDirectives;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->initDirectiveTesting();
+    }
+
+    protected function tearDown(): void
+    {
+        $this->destroyDirectiveTesting();
+        parent::tearDown();
+    }
+
+    public function test_directive_creates_user_successfully(): void
+    {
+        $directive = new UserCreateDirective($this->interaction);
+        $this->registerDirective($directive);
+
+        $response = $this->runDirective(
+            UserCreateDirective::class,
+            ['John Doe', 'john@example.com', '--role=admin']
+        );
+
+        $this->assertSame(ExitCode::SUCCESS, $response->exitCode);
+        $this->assertStringContainsString('User created', $response->output);
+    }
+}
+```
+
+### 11.3. Méthodes essentielles du trait InteractsWithDirectives
+
+| Méthode | Description | Quand l'utiliser |
+|---------|-------------|------------------|
+| `initDirectiveTesting(bool $bootLaravel = false)` | Initialise l'environnement de test | Dans `setUp()` |
+| `destroyDirectiveTesting()` | Nettoie l'environnement de test | Dans `tearDown()` |
+| `registerDirective(AbstractDirective $directive)` | Enregistre une directive pour le test | Pour chaque directive à tester |
+| `registerDirectives(array $directives)` | Enregistre plusieurs directives | Pour les tests d'intégration multiple |
+| `clearRegisteredDirectives()` | Vide le registre des directives | Entre deux tests si besoin |
+| `runDirective(string $className, array $arguments = [])` | Exécute une directive et retourne la réponse | Dans l'act du test |
+| `createTestDirective(string $signature, callable $execute)` | Crée une directive temporaire avec closure | Pour les tests rapides |
+
+### 11.4. La classe DirectiveResponseRecord
+
+```php
+$response = $this->runDirective('calculator', ['add', '5', '3']);
+
+// Propriétés disponibles
+$response->exitCode   // ExitCode enum (SUCCESS, FAILURE, etc.)
+$response->output     // string (tout ce qui a été affiché)
+
+// Assertions possibles
+$this->assertSame(ExitCode::SUCCESS, $response->exitCode);
+$this->assertStringContainsString('8', $response->output);
+$this->assertStringNotContainsString('error', $response->output);
+$this->assertMatchesRegularExpression('/\d+/', $response->output);
+```
+
+### 11.5. Exemples concrets
+
+#### 11.5.1. Tester une directive avec arguments et options
+
+```php
+public function test_directive_with_arguments_and_options(): void
+{
+    $directive = new MyDirective($this->interaction);
+    $this->registerDirective($directive);
+
+    $response = $this->runDirective(
+        MyDirective::class,
+        ['arg1', 'arg2', '--verbose', '--format=json']
+    );
+
+    $this->assertSame(ExitCode::SUCCESS, $response->exitCode);
+    $this->assertStringContainsString('Processing in verbose mode', $response->output);
+}
+```
+
+#### 11.5.2. Créer une directive temporaire avec closure
+
+```php
+public function test_temporary_directive(): void
+{
+    $executed = false;
+
+    $this->createTestDirective('temp-command', function ($d) use (&$executed) {
+        $executed = true;
+        $d->info('Temporary command executed');
+        return ExitCode::SUCCESS;
+    });
+
+    $response = $this->runDirective('temp-command');
+
+    $this->assertTrue($executed);
+    $this->assertStringContainsString('Temporary command executed', $response->output);
+}
+```
+
+#### 11.5.3. Tester avec Laravel bootstrappé
+
+```php
+protected function setUp(): void
+{
+    parent::setUp();
+    $this->initDirectiveTesting(bootLaravel: true);
+}
+
+public function test_directive_needs_database(): void
+{
+    $directive = new UserListDirective($this->interaction);
+    $this->registerDirective($directive);
+
+    $response = $this->runDirective(UserListDirective::class, ['--active']);
+
+    $this->assertSame(ExitCode::SUCCESS, $response->exitCode);
+    // Les requêtes Eloquent fonctionnent !
+}
+```
+
+#### 11.5.4. Tester les cas d'erreur
+
+```php
+public function test_directive_returns_invalid_argument_when_missing_parameter(): void
+{
+    $directive = new CalculatorDirective($this->interaction);
+    $this->registerDirective($directive);
+
+    $response = $this->runDirective('calculator', ['add']);
+
+    $this->assertSame(ExitCode::INVALID_ARGUMENT, $response->exitCode);
+    $this->assertStringContainsString('Not enough arguments', $response->output);
+}
+
+public function test_directive_handles_division_by_zero(): void
+{
+    $directive = new CalculatorDirective($this->interaction);
+    $this->registerDirective($directive);
+
+    $response = $this->runDirective('calculator', ['div', '10', '0']);
+
+    $this->assertSame(ExitCode::INVALID_ARGUMENT, $response->exitCode);
+    $this->assertStringContainsString('Division by zero', $response->output);
+}
+```
+
+### 11.6. Ce que fait initDirectiveTesting() automatiquement
+
+| Action | Description |
+|--------|-------------|
+| Création d'un dossier temporaire | `sys_get_temp_dir() . '/directive_test_xxxxx'` |
+| Changement du répertoire courant | `chdir()` vers le dossier temporaire |
+| (Optionnel) Structure Laravel minimale | `bootstrap/`, `config/`, `storage/` |
+| Container IoC | Instance de `Illuminate\Container\Container` |
+| Services de directive | Parser, Hydrator, Renderer, etc. |
+| Registry de test | `TestDirectiveRegistry` pour stocker les directives |
+
+### 11.7. Nettoyage automatique
+
+```php
+protected function tearDown(): void
+{
+    $this->destroyDirectiveTesting(); // ← Nettoie TOUT
+    parent::tearDown();
+}
+```
+
+`destroyDirectiveTesting()` effectue :
+- Vidage du registre des directives
+- Suppression récursive du dossier temporaire
+- Restauration du répertoire original (`chdir` back)
+- Nettoyage des instances Laravel
+
+### 11.8. Récapitulatif des bonnes pratiques
+
+| Bonne pratique | Pourquoi |
+|----------------|----------|
+| Toujours appeler `initDirectiveTesting()` dans `setUp()` | Initialise l'environnement isolé |
+| Toujours appeler `destroyDirectiveTesting()` dans `tearDown()` | Nettoie les fichiers temporaires |
+| Utiliser `registerDirective()` avant `runDirective()` | La directive doit être enregistrée |
+| Tester à la fois succès et échec | Valider tous les chemins d'exécution |
+| Capturer et asserter sur l'output | Vérifier les messages utilisateur |
+| Tester les ExitCode appropriés | `SUCCESS`, `FAILURE`, `INVALID_ARGUMENT` |
+
+### 11.9. Exemple complet avec toutes les assertions
+
+```php
+#[AllowMockObjectsWithoutExpectations]
+final class UserCreateDirectiveTest extends TestCase
+{
+    use InteractsWithDirectives;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->initDirectiveTesting(bootLaravel: true);
+    }
+
+    protected function tearDown(): void
+    {
+        $this->destroyDirectiveTesting();
+        parent::tearDown();
+    }
+
+    public function test_user_creation_success(): void
+    {
+        $directive = new UserCreateDirective($this->interaction);
+        $this->registerDirective($directive);
+
+        $response = $this->runDirective(
+            UserCreateDirective::class,
+            ['Jane Doe', 'jane@example.com', '--role=editor', '--notify']
+        );
+
+        $this->assertSame(ExitCode::SUCCESS, $response->exitCode);
+        $this->assertStringContainsString('✅ User Jane Doe created', $response->output);
+        $this->assertStringContainsString('📧 Notification sent', $response->output);
+    }
+
+    public function test_user_creation_fails_when_email_invalid(): void
+    {
+        $directive = new UserCreateDirective($this->interaction);
+        $this->registerDirective($directive);
+
+        $response = $this->runDirective(
+            UserCreateDirective::class,
+            ['Jane Doe', 'invalid-email']
+        );
+
+        $this->assertSame(ExitCode::INVALID_ARGUMENT, $response->exitCode);
+        $this->assertStringContainsString('Invalid email', $response->output);
+    }
+}
+```
+
+---
+
+## 12. Récapitulatif des contraintes
 
 | Contrainte | Règle |
 |------------|-------|
@@ -555,13 +1001,14 @@ final class UserCreateDirective extends AbstractDirective
 | **Laravel** | Activable via `shouldBootLaravel()` |
 | **Retour** | `ExitCode::SUCCESS` ou `ExitCode::FAILURE` |
 | **Route unique** | Une Directive = une commande |
-| **Tests unitaires** | ❌ Jamais (uniquement tests d'intégration) |
+| **Tests unitaires** | ❌ Jamais |
+| **Tests d'intégration** | ✅ Obligatoire via `InteractsWithDirectives` |
 
 ---
 
-## 12. Règle d'or
+## 13. Règle d'or
 
-> **Une Directive fait une chose : répondre à une commande CLI avec un code de sortie. Elle reçoit des arguments et options typés, orchestre, et retourne un ExitCode via les méthodes d'AbstractDirective. Pas de tests unitaires, uniquement des tests d'intégration.**
+> **Une Directive fait une chose : répondre à une commande CLI avec un code de sortie. Elle reçoit des arguments et options typés, orchestre, et retourne un ExitCode via les méthodes d'AbstractDirective. Pas de tests unitaires, uniquement des tests d'intégration avec InteractsWithDirectives.**
 
 ```php
 // La Directive parfaite
@@ -592,3 +1039,4 @@ final class PerfectDirective extends AbstractDirective
     }
 }
 ```
+---
