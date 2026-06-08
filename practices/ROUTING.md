@@ -2,17 +2,17 @@
 
 ## 1. Définition
 
-Les **routes** sont la configuration qui fait le lien entre une URL et une Action. Elles sont définies dans les fichiers `web.php` et `api.php` en utilisant la façade `ActionRoute`.
+Les **routes** sont la configuration qui fait le lien entre une URL et une Action. Elles sont définies dans les fichiers `web.php` et `api.php` en utilisant la fonction helper `action_route()`.
 
 ```
-URL → ActionRoute → Request → getRecord() → Record → Action → Response
+URL → action_route() → Request → getRecord() → Record → Action → Response
 ```
 
 ```php
-use AndyDefer\Actions\Support\ActionRoute;
+use function action_route;
 
 // Enregistrement d'une route API
-ActionRoute::get('/api/users/{id}', ShowUserRequest::class, ShowUserAction::class);
+Route::get('/api/users/{id}', action_route(ShowUserRequest::class, ShowUserAction::class));
 ```
 
 ---
@@ -28,17 +28,17 @@ ActionRoute::get('/api/users/{id}', ShowUserRequest::class, ShowUserAction::clas
 
 ```php
 // ✅ BON - web.php (GET uniquement)
-ActionRoute::get('/dashboard', Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class);
+Route::get('/dashboard', action_route(Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class));
 
 // ✅ BON - api.php (toutes les méthodes)
-ActionRoute::get('/users', Api\Users\ListUsersRequest::class, Api\Users\ListUsersAction::class);
-ActionRoute::post('/users', Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class);
-ActionRoute::put('/users/{userId}', Api\Users\ReplaceUserRequest::class, Api\Users\ReplaceUserAction::class);
-ActionRoute::patch('/users/{userId}', Api\Users\UpdateUserRequest::class, Api\Users\UpdateUserAction::class);
-ActionRoute::delete('/users/{userId}', Api\Users\DeleteUserRequest::class, Api\Users\DeleteUserAction::class);
+Route::get('/users', action_route(Api\Users\ListUsersRequest::class, Api\Users\ListUsersAction::class));
+Route::post('/users', action_route(Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class));
+Route::put('/users/{userId}', action_route(Api\Users\ReplaceUserRequest::class, Api\Users\ReplaceUserAction::class));
+Route::patch('/users/{userId}', action_route(Api\Users\UpdateUserRequest::class, Api\Users\UpdateUserAction::class));
+Route::delete('/users/{userId}', action_route(Api\Users\DeleteUserRequest::class, Api\Users\DeleteUserAction::class));
 
 // ❌ MAUVAIS - POST dans web.php (INTERDIT)
-ActionRoute::post('/users', Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class);
+Route::post('/users', action_route(Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class));
 ```
 
 ### 2.1 Pourquoi cette séparation ?
@@ -51,25 +51,36 @@ ActionRoute::post('/users', Api\Users\CreateUserRequest::class, Api\Users\Create
 
 ---
 
-## 3. ActionRoute : La façade d'enregistrement
+## 3. `action_route()` : La fonction helper d'enregistrement
 
-> **⚠️ `ActionRoute` remplace les closures manuelles. Elle assure la liaison entre une Request et une Action.**
+> **⚠️ `action_route()` remplace l'ancienne façade `ActionRoute` (dépréciée). Elle retourne une closure qui assure la liaison entre une Request et une Action, tout en préservant l'API fluide de Laravel.**
 
-### 3.1 Méthodes disponibles
+### 3.1 Utilisation avec `Route`
 
-| Méthode | Description | Exemple |
-|---------|-------------|---------|
-| `get($uri, $requestClass, $actionClass)` | Route GET | `ActionRoute::get('/users', ListUsersRequest::class, ListUsersAction::class)` |
-| `post($uri, $requestClass, $actionClass)` | Route POST | `ActionRoute::post('/users', CreateUserRequest::class, CreateUserAction::class)` |
-| `put($uri, $requestClass, $actionClass)` | Route PUT | `ActionRoute::put('/users/{id}', UpdateUserRequest::class, UpdateUserAction::class)` |
-| `patch($uri, $requestClass, $actionClass)` | Route PATCH | `ActionRoute::patch('/users/{id}', PatchUserRequest::class, PatchUserAction::class)` |
-| `delete($uri, $requestClass, $actionClass)` | Route DELETE | `ActionRoute::delete('/users/{id}', DeleteUserRequest::class, DeleteUserAction::class)` |
-| `match($methods, $uri, $requestClass, $actionClass)` | Multi-méthodes | `ActionRoute::match(['GET','POST'], '/resource', ResourceRequest::class, ResourceAction::class)` |
-| `any($uri, $requestClass, $actionClass)` | Toutes méthodes | `ActionRoute::any('/webhook', WebhookRequest::class, WebhookAction::class)` |
+```php
+use function action_route;
 
-### 3.2 Contrainte d'extension (Type Safety)
+// La fonction s'utilise directement comme callback de route
+Route::get('/users/{id}', action_route(ShowUserRequest::class, ShowUserAction::class))
+    ->name('users.show')
+    ->middleware('auth');
+```
 
-**Toute classe passée à `ActionRoute` DOIT étendre les classes abstraites appropriées.**
+### 3.2 Ce que fait `action_route()` automatiquement
+
+```php
+// Cette ligne :
+Route::get('/users/{id}', action_route(ShowUserRequest::class, ShowUserAction::class));
+
+// Génère cette closure interne :
+function ($id, ShowUserRequest $request, ShowUserAction $action) {
+    return $action->run($request->getRecord());
+}
+```
+
+### 3.3 Contrainte d'extension (Type Safety)
+
+**Toute classe passée à `action_route()` DOIT étendre les classes abstraites appropriées.**
 
 | Paramètre | Doit étendre | Raison |
 |-----------|--------------|--------|
@@ -81,10 +92,10 @@ ActionRoute::post('/users', Api\Users\CreateUserRequest::class, Api\Users\Create
 final class GetUserRequest extends AbstractRequest { ... }
 final class GetUserAction extends AbstractAction { ... }
 
-ActionRoute::get('/users/{id}', GetUserRequest::class, GetUserAction::class);
+Route::get('/users/{id}', action_route(GetUserRequest::class, GetUserAction::class));
 
 // ❌ Invalide - Lance une exception
-ActionRoute::get('/users/{id}', stdClass::class, GetUserAction::class);
+Route::get('/users/{id}', action_route(stdClass::class, GetUserAction::class));
 // Exception: "Request class "stdClass" must extend AbstractRequest"
 ```
 
@@ -96,30 +107,25 @@ ActionRoute::get('/users/{id}', stdClass::class, GetUserAction::class);
 
 ```php
 // web.php
-ActionRoute::get('/users', Web\Users\ListUsersRequest::class, Web\Users\ListUsersAction::class);
-ActionRoute::get('/users/{userId}', Web\Users\ShowUserRequest::class, Web\Users\ShowUserAction::class);
+Route::get('/users', action_route(Web\Users\ListUsersRequest::class, Web\Users\ListUsersAction::class));
+Route::get('/users/{userId}', action_route(Web\Users\ShowUserRequest::class, Web\Users\ShowUserAction::class));
 
 // api.php
-ActionRoute::get('/users', Api\Users\ListUsersRequest::class, Api\Users\ListUsersAction::class);
-ActionRoute::post('/users', Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class);
+Route::get('/users', action_route(Api\Users\ListUsersRequest::class, Api\Users\ListUsersAction::class));
+Route::post('/users', action_route(Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class));
 ```
 
 ---
 
 ## 5. Règle : Une Action reçoit JAMAIS une Request (⚠️ RÈGLE ABSOLUE)
 
-> **⚠️ Une Action reçoit TOUJOURS un Record créé par la méthode `getRecord()` de la Form Request. `ActionRoute` est responsable d'appeler `getRecord()`.**
+> **⚠️ Une Action reçoit TOUJOURS un Record créé par la méthode `getRecord()` de la Form Request. `action_route()` est responsable d'appeler `getRecord()`.**
 
 ```php
-// ✅ BON - ActionRoute appelle getRecord() automatiquement
-ActionRoute::get('/users/{userId}', ShowUserRequest::class, ShowUserAction::class);
+// ✅ BON - action_route() appelle getRecord() automatiquement
+Route::get('/users/{userId}', action_route(ShowUserRequest::class, ShowUserAction::class));
 
-// La closure interne générée par ActionRoute
-function ($userId, ShowUserRequest $request, ShowUserAction $action) {
-    return $action->run($request->getRecord());  // ✅ Appel automatique
-}
-
-// ❌ MAUVAIS - Ne pas utiliser ActionRoute (INTERDIT)
+// ❌ MAUVAIS - Ne pas utiliser action_route() (INTERDIT)
 Route::get('/users/{userId}', function ($userId, ShowUserRequest $request, ShowUserAction $action) {
     return $action->run($request);  // ❌ Passe la Request, pas le Record
 });
@@ -136,13 +142,13 @@ Route::get('/users/{userId}', function ($userId, ShowUserRequest $request, ShowU
 
 ---
 
-## 6. Ordre des paramètres dans ActionRoute
+## 6. Ordre des paramètres dans `action_route()`
 
-> **L'ordre des paramètres d'URL est géré automatiquement par ActionRoute. La Request peut les récupérer via `$this->route('nom')`.**
+> **L'ordre des paramètres d'URL est géré automatiquement par `action_route()`. La Request peut les récupérer via `$this->route('nom')`.**
 
 ```php
 // URL: PUT /users/{userId}/posts/{postId}
-ActionRoute::put('/users/{userId}/posts/{postId}', UpdatePostRequest::class, UpdatePostAction::class);
+Route::put('/users/{userId}/posts/{postId}', action_route(UpdatePostRequest::class, UpdatePostAction::class));
 
 // La Request récupère les paramètres
 final class UpdatePostRequest extends AbstractRequest
@@ -177,7 +183,7 @@ final class UpdatePostAction extends AbstractAction
 
 ```php
 // Route
-ActionRoute::get('/users', ListUsersRequest::class, ListUsersAction::class);
+Route::get('/users', action_route(ListUsersRequest::class, ListUsersAction::class));
 
 // Form Request
 final class ListUsersRequest extends AbstractRequest
@@ -197,7 +203,7 @@ final class ListUsersRequest extends AbstractRequest
 
 ```php
 // Route
-ActionRoute::get('/users/{userId}', ShowUserRequest::class, ShowUserAction::class);
+Route::get('/users/{userId}', action_route(ShowUserRequest::class, ShowUserAction::class));
 
 // Form Request
 final class ShowUserRequest extends AbstractRequest
@@ -217,7 +223,7 @@ final class ShowUserRequest extends AbstractRequest
 
 ```php
 // Route
-ActionRoute::get('/users/{userId}/posts/{postId}', ShowPostRequest::class, ShowPostAction::class);
+Route::get('/users/{userId}/posts/{postId}', action_route(ShowPostRequest::class, ShowPostAction::class));
 
 // Form Request
 final class ShowPostRequest extends AbstractRequest
@@ -238,7 +244,7 @@ final class ShowPostRequest extends AbstractRequest
 
 ```php
 // Route
-ActionRoute::post('/users', CreateUserRequest::class, CreateUserAction::class);
+Route::post('/users', action_route(CreateUserRequest::class, CreateUserAction::class));
 
 // Form Request
 final class CreateUserRequest extends AbstractRequest
@@ -258,27 +264,32 @@ final class CreateUserRequest extends AbstractRequest
 
 ---
 
-## 8. Utilisation avec les middlewares et préfixes
+## 8. Utilisation avec les middlewares, préfixes et nommage
 
-> **`ActionRoute` s'intègre parfaitement avec les groupes de routes Laravel.**
+> **`action_route()` s'intègre parfaitement avec l'API fluide des routes Laravel.**
 
 ```php
-// Routes avec middleware
-Route::middleware(['auth', 'verified'])->group(function () {
-    ActionRoute::get('/dashboard', DashboardRequest::class, DashboardAction::class);
-    ActionRoute::get('/profile', ProfileRequest::class, ProfileAction::class);
-});
+use function action_route;
+
+// Routes avec middleware et nom
+Route::get('/dashboard', action_route(DashboardRequest::class, DashboardAction::class))
+    ->name('dashboard')
+    ->middleware(['auth', 'verified']);
 
 // Routes avec préfixe
 Route::prefix('admin')->group(function () {
-    ActionRoute::get('/users', AdminListUsersRequest::class, AdminListUsersAction::class);
-    ActionRoute::post('/users', AdminCreateUserRequest::class, AdminCreateUserAction::class);
+    Route::get('/users', action_route(AdminListUsersRequest::class, AdminListUsersAction::class))
+        ->name('admin.users.index');
+    Route::post('/users', action_route(AdminCreateUserRequest::class, AdminCreateUserAction::class))
+        ->name('admin.users.store');
 });
 
-// Routes avec préfixe et middleware
+// Routes avec préfixe, middleware et nom
 Route::prefix('api/v1')->middleware('throttle:api')->group(function () {
-    ActionRoute::get('/products', ListProductsRequest::class, ListProductsAction::class);
-    ActionRoute::get('/products/{id}', ShowProductRequest::class, ShowProductAction::class);
+    Route::get('/products', action_route(ListProductsRequest::class, ListProductsAction::class))
+        ->name('api.v1.products.index');
+    Route::get('/products/{id}', action_route(ShowProductRequest::class, ShowProductAction::class))
+        ->name('api.v1.products.show');
 });
 ```
 
@@ -290,7 +301,7 @@ Route::prefix('api/v1')->middleware('throttle:api')->group(function () {
 
 ```php
 // routes/web.php
-ActionRoute::get('/dashboard', ShowDashboardRequest::class, ShowDashboardAction::class);
+Route::get('/dashboard', action_route(ShowDashboardRequest::class, ShowDashboardAction::class));
 
 // Action Web
 final class ShowDashboardAction extends AbstractAction
@@ -319,10 +330,10 @@ final class ShowDashboardAction extends AbstractAction
 
 ```php
 // web.php
-ActionRoute::get('/dashboard', Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class);
+Route::get('/dashboard', action_route(Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class));
 
 // api.php
-ActionRoute::get('/dashboard', Api\Dashboard\ShowDashboardRequest::class, Api\Dashboard\ShowDashboardAction::class);
+Route::get('/dashboard', action_route(Api\Dashboard\ShowDashboardRequest::class, Api\Dashboard\ShowDashboardAction::class));
 ```
 
 ### 10.1 Action Web (validation uniquement)
@@ -374,7 +385,7 @@ final class ShowDashboardAction extends AbstractAction
 // URL: GET /users?user_slug=john&page=2&per_page=15
 
 // Route
-ActionRoute::get('/users', ListUsersRequest::class, ListUsersAction::class);
+Route::get('/users', action_route(ListUsersRequest::class, ListUsersAction::class));
 
 // Form Request
 final class ListUsersRequest extends AbstractRequest
@@ -401,66 +412,141 @@ final class ListUsersRequest extends AbstractRequest
 
 ---
 
-## 12. Récapitulatif des contraintes
+## 12. Convention de nommage (⚠️ OBLIGATOIRE)
 
-| Contrainte | Règle |
-|------------|-------|
-| **`web.php`** | `GET` uniquement (via `ActionRoute::get()`) |
-| **`api.php`** | Toutes méthodes (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) |
-| **ActionRoute** | ✅ Utilisation OBLIGATOIRE (pas de closures manuelles) |
-| **Request** | ✅ DOIT étendre `AbstractRequest` |
-| **Action** | ✅ DOIT étendre `AbstractAction` |
-| **Appel à l'Action** | ✅ `ActionRoute` appelle `getRecord()` automatiquement |
-| **Paramètre URL** | ✅ Récupéré via `$this->route('nom')` |
-| **Paramètre requête** | ✅ Récupéré via `$this->input('nom')` |
-| **Web vs API** | ✅ Actions séparées |
+> **Le nom de la route détermine le nom des dossiers et des classes associées. Cette convention est impérative pour la cohérence du code.**
+
+### 12.1 Règle fondamentale
+
+La route détermine la convention de nommage complète :
+
+```bash
+# La route détermine la convention
+api.users.show → Api/Users/Show
+api.users.index → Api/Users/Index
+```
+
+### 12.2 Correspondance complète
+
+| Composant | Convention | Exemple (`api.users.show`) |
+|-----------|------------|---------------------------|
+| **Action** | `Actions\{Chemin}Action` | `App\Actions\Api\Users\ShowAction` |
+| **Request** | `Http\Requests\{Chemin}Request` | `App\Http\Requests\Api\Users\ShowRequest` |
+| **Record** | `Records\{Chemin}Record` | `App\Records\Api\Users\ShowRecord` |
+| **Data** | `Data\{Chemin}Data` | `App\Data\Api\Users\ShowData` |
+
+### 12.3 Exemples concrets
+
+| Nom de route | Dossier | Action | Request | Record | Data |
+|--------------|---------|--------|---------|--------|------|
+| `api.users.show` | `Api/Users` | `ShowAction` | `ShowRequest` | `ShowRecord` | `ShowData` |
+| `api.users.index` | `Api/Users` | `IndexAction` | `IndexRequest` | `IndexRecord` | `IndexData` |
+| `api.users.store` | `Api/Users` | `StoreAction` | `StoreRequest` | `StoreRecord` | `StoreData` |
+| `api.doctors.show` | `Api/Doctors` | `ShowAction` | `ShowRequest` | `ShowRecord` | `ShowData` |
+| `web.dashboard.index` | `Web/Dashboard` | `IndexAction` | `IndexRequest` | `IndexRecord` | `IndexData` |
+
+### 12.4 Génération automatique avec Directive Forge
+
+```bash
+# La commande crée automatiquement les 4 classes avec les bons noms
+./vendor/bin/directive make-action api/users/show --fully
+
+# Résultat :
+# ✅ Action:  App\Actions\Api\Users\ShowAction
+# ✅ Request: App\Http\Requests\Api\Users\ShowRequest  
+# ✅ Record:  App\Records\Api\Users\ShowRecord
+# ✅ Data:    App\Data\Api\Users\ShowData
+```
+
+### 12.5 Pourquoi cette convention ?
+
+| Raison | Explication |
+|--------|-------------|
+| **Prédictible** | Le développeur sait immédiatement où chercher chaque classe |
+| **Auto-documenté** | Le chemin du fichier indique la route qu'il sert |
+| **IDE-friendly** | La complétion automatique fonctionne parfaitement |
+| **Sans collision** | Plusieurs endpoints avec le même nom dans des dossiers différents coexistent |
+
+### 12.6 À respecter impérativement
+
+```php
+// ✅ Bon : Le namespace correspond au chemin
+namespace App\Actions\Api\Users;
+final class ShowAction extends AbstractAction {}
+
+// ❌ Mauvais : Namespace incohérent avec le chemin
+namespace App\Actions\Doctors;
+final class ShowDoctorAction extends AbstractAction {}
+```
+
+> **Important :** Cette convention de nommage est obligatoire pour que l'autoloading, les outils d'analyse statique (PHPStan, Psalm) et la maintenance à long terme fonctionnent correctement.
 
 ---
 
-## 13. Règle d'or
+## 13. Récapitulatif des contraintes
 
-> **Une route web GET ne fait que valider et rendre une vue Inertia. La logique métier est dans l'API. Toute route utilise `ActionRoute`. Toute Request étend `AbstractRequest`. Toute Action étend `AbstractAction`. Les paramètres d'URL sont récupérés via `$this->route()` dans la Request.**
+| Contrainte | Règle |
+|------------|-------|
+| **`web.php`** | `GET` uniquement (via `Route::get()` + `action_route()`) |
+| **`api.php`** | Toutes méthodes (`GET`, `POST`, `PUT`, `PATCH`, `DELETE`) |
+| **`action_route()`** | ✅ Utilisation OBLIGATOIRE (pas de closures manuelles) |
+| **Request** | ✅ DOIT étendre `AbstractRequest` |
+| **Action** | ✅ DOIT étendre `AbstractAction` |
+| **Appel à l'Action** | ✅ `action_route()` appelle `getRecord()` automatiquement |
+| **Paramètre URL** | ✅ Récupéré via `$this->route('nom')` |
+| **Paramètre requête** | ✅ Récupéré via `$this->input('nom')` |
+| **Web vs API** | ✅ Actions séparées |
+| **Convention nommage** | ✅ Le nom de la route détermine les dossiers et classes |
+
+---
+
+## 14. Règle d'or
+
+> **Une route web GET ne fait que valider et rendre une vue Inertia. La logique métier est dans l'API. Toute route utilise `action_route()`. Toute Request étend `AbstractRequest`. Toute Action étend `AbstractAction`. Les paramètres d'URL sont récupérés via `$this->route()` dans la Request. Le nom de la route détermine la convention de nommage des classes.**
 
 ```php
 // ✅ BON - web.php
-ActionRoute::get('/dashboard', Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class);
+Route::get('/dashboard', action_route(Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class))
+    ->name('dashboard');
 
 // ✅ BON - api.php (GET)
-ActionRoute::get('/dashboard', Api\Dashboard\ShowDashboardRequest::class, Api\Dashboard\ShowDashboardAction::class);
+Route::get('/dashboard', action_route(Api\Dashboard\ShowDashboardRequest::class, Api\Dashboard\ShowDashboardAction::class))
+    ->name('api.dashboard.show');
 
 // ✅ BON - api.php (POST)
-ActionRoute::post('/users', Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class);
+Route::post('/users', action_route(Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class))
+    ->name('api.users.store');
 
 // ✅ BON - api.php (avec paramètre d'URL)
-ActionRoute::get('/users/{userId}', Api\Users\ShowUserRequest::class, Api\Users\ShowUserAction::class);
-
-// ✅ BON - api.php (avec plusieurs paramètres d'URL)
-ActionRoute::put('/users/{userId}/posts/{postId}', Api\Posts\UpdatePostRequest::class, Api\Posts\UpdatePostAction::class);
+Route::get('/users/{userId}', action_route(Api\Users\ShowUserRequest::class, Api\Users\ShowUserAction::class))
+    ->name('api.users.show');
 
 // ✅ BON - Avec middleware
 Route::middleware('auth')->group(function () {
-    ActionRoute::get('/profile', ProfileRequest::class, ProfileAction::class);
+    Route::get('/profile', action_route(ProfileRequest::class, ProfileAction::class))
+        ->name('profile');
 });
 
 // ✅ BON - Avec préfixe
 Route::prefix('admin')->group(function () {
-    ActionRoute::get('/users', AdminListUsersRequest::class, AdminListUsersAction::class);
+    Route::get('/users', action_route(AdminListUsersRequest::class, AdminListUsersAction::class))
+        ->name('admin.users.index');
 });
 
-// ❌ MAUVAIS - Ne pas utiliser ActionRoute
+// ❌ MAUVAIS - Ne pas utiliser action_route()
 Route::get('/users', function (ListUsersRequest $request, ListUsersAction $action) {
-    return $action->run($request->toRecord());  // ❌ Utiliser ActionRoute
+    return $action->run($request->getRecord());
 });
 
 // ❌ MAUVAIS - Passe la Request à l'Action
-Route::get('/users', function (ListUsersRequest $request, ListUsersAction $action) {
-    return $action->run($request);  // ❌ DOIT être $request->getRecord()
-});
+Route::get('/users', action_route(ListUsersRequest::class, function($request) {
+    // Ceci n'est pas possible avec action_route()
+}));
 ```
 
 ---
 
-## 14. Exemple complet : Fichiers de routes
+## 15. Exemple complet : Fichiers de routes
 
 ### routes/web.php
 
@@ -469,7 +555,7 @@ Route::get('/users', function (ListUsersRequest $request, ListUsersAction $actio
 
 declare(strict_types=1);
 
-use AndyDefer\Actions\Support\ActionRoute;
+use function action_route;
 
 /*
 |--------------------------------------------------------------------------
@@ -480,15 +566,24 @@ use AndyDefer\Actions\Support\ActionRoute;
 |
 */
 
-ActionRoute::get('/', Web\Home\ShowHomeRequest::class, Web\Home\ShowHomeAction::class);
+Route::get('/', action_route(Web\Home\ShowHomeRequest::class, Web\Home\ShowHomeAction::class))
+    ->name('home');
 
-ActionRoute::get('/dashboard', Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class);
+Route::get('/dashboard', action_route(Web\Dashboard\ShowDashboardRequest::class, Web\Dashboard\ShowDashboardAction::class))
+    ->name('dashboard')
+    ->middleware('auth');
 
-ActionRoute::get('/users', Web\Users\ListUsersRequest::class, Web\Users\ListUsersAction::class);
-ActionRoute::get('/users/{userId}', Web\Users\ShowUserRequest::class, Web\Users\ShowUserAction::class);
+Route::get('/users', action_route(Web\Users\ListUsersRequest::class, Web\Users\ListUsersAction::class))
+    ->name('users.index');
 
-ActionRoute::get('/products', Web\Products\ListProductsRequest::class, Web\Products\ListProductsAction::class);
-ActionRoute::get('/products/{productId}', Web\Products\ShowProductRequest::class, Web\Products\ShowProductAction::class);
+Route::get('/users/{userId}', action_route(Web\Users\ShowUserRequest::class, Web\Users\ShowUserAction::class))
+    ->name('users.show');
+
+Route::get('/products', action_route(Web\Products\ListProductsRequest::class, Web\Products\ListProductsAction::class))
+    ->name('products.index');
+
+Route::get('/products/{productId}', action_route(Web\Products\ShowProductRequest::class, Web\Products\ShowProductAction::class))
+    ->name('products.show');
 ```
 
 ### routes/api.php
@@ -498,7 +593,7 @@ ActionRoute::get('/products/{productId}', Web\Products\ShowProductRequest::class
 
 declare(strict_types=1);
 
-use AndyDefer\Actions\Support\ActionRoute;
+use function action_route;
 
 /*
 |--------------------------------------------------------------------------
@@ -511,21 +606,59 @@ use AndyDefer\Actions\Support\ActionRoute;
 */
 
 // Users
-ActionRoute::get('/users', Api\Users\ListUsersRequest::class, Api\Users\ListUsersAction::class);
-ActionRoute::post('/users', Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class);
-ActionRoute::get('/users/{userId}', Api\Users\ShowUserRequest::class, Api\Users\ShowUserAction::class);
-ActionRoute::put('/users/{userId}', Api\Users\ReplaceUserRequest::class, Api\Users\ReplaceUserAction::class);
-ActionRoute::patch('/users/{userId}', Api\Users\UpdateUserRequest::class, Api\Users\UpdateUserAction::class);
-ActionRoute::delete('/users/{userId}', Api\Users\DeleteUserRequest::class, Api\Users\DeleteUserAction::class);
+Route::get('/users', action_route(Api\Users\ListUsersRequest::class, Api\Users\ListUsersAction::class))
+    ->name('api.users.index');
+
+Route::post('/users', action_route(Api\Users\CreateUserRequest::class, Api\Users\CreateUserAction::class))
+    ->name('api.users.store');
+
+Route::get('/users/{userId}', action_route(Api\Users\ShowUserRequest::class, Api\Users\ShowUserAction::class))
+    ->name('api.users.show');
+
+Route::put('/users/{userId}', action_route(Api\Users\ReplaceUserRequest::class, Api\Users\ReplaceUserAction::class))
+    ->name('api.users.replace');
+
+Route::patch('/users/{userId}', action_route(Api\Users\UpdateUserRequest::class, Api\Users\UpdateUserAction::class))
+    ->name('api.users.update');
+
+Route::delete('/users/{userId}', action_route(Api\Users\DeleteUserRequest::class, Api\Users\DeleteUserAction::class))
+    ->name('api.users.destroy');
 
 // Products
-ActionRoute::get('/products', Api\Products\ListProductsRequest::class, Api\Products\ListProductsAction::class);
-ActionRoute::get('/products/{productId}', Api\Products\ShowProductRequest::class, Api\Products\ShowProductAction::class);
-ActionRoute::post('/products', Api\Products\CreateProductRequest::class, Api\Products\CreateProductAction::class);
-ActionRoute::put('/products/{productId}', Api\Products\ReplaceProductRequest::class, Api\Products\ReplaceProductAction::class);
-ActionRoute::delete('/products/{productId}', Api\Products\DeleteProductRequest::class, Api\Products\DeleteProductAction::class);
+Route::get('/products', action_route(Api\Products\ListProductsRequest::class, Api\Products\ListProductsAction::class))
+    ->name('api.products.index');
+
+Route::get('/products/{productId}', action_route(Api\Products\ShowProductRequest::class, Api\Products\ShowProductAction::class))
+    ->name('api.products.show');
+
+Route::post('/products', action_route(Api\Products\CreateProductRequest::class, Api\Products\CreateProductAction::class))
+    ->name('api.products.store');
+
+Route::put('/products/{productId}', action_route(Api\Products\ReplaceProductRequest::class, Api\Products\ReplaceProductAction::class))
+    ->name('api.products.replace');
+
+Route::delete('/products/{productId}', action_route(Api\Products\DeleteProductRequest::class, Api\Products\DeleteProductAction::class))
+    ->name('api.products.destroy');
 
 // Dashboard
-ActionRoute::get('/dashboard', Api\Dashboard\ShowDashboardRequest::class, Api\Dashboard\ShowDashboardAction::class);
+Route::get('/dashboard', action_route(Api\Dashboard\ShowDashboardRequest::class, Api\Dashboard\ShowDashboardAction::class))
+    ->name('api.dashboard.show');
+```
+
+---
+
+## 16. Migration depuis ActionRoute (dépréciée)
+
+Si vous utilisiez l'ancienne façade `ActionRoute`, voici comment migrer :
+
+```php
+// Ancienne syntaxe (dépréciée)
+ActionRoute::get('/api/users', ListUsersRequest::class, ListUsersAction::class);
+
+// Nouvelle syntaxe (recommandée)
+use function action_route;
+
+Route::get('/api/users', action_route(ListUsersRequest::class, ListUsersAction::class))
+    ->name('api.users.index');
 ```
 ---
