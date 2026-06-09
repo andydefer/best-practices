@@ -1,4 +1,18 @@
-# Principe d'usage des Services
+# Principe d'usage des Services (Version Finale - Complète)
+
+## Table des matières
+
+1. [Définition](#1-définition)
+2. [Pourquoi les Services remplacent les Traits](#2-pourquoi-les-services-remplacent-les-traits)
+3. [Caractéristiques fondamentales](#3-caractéristiques-fondamentales)
+4. [Configuration externe vs constantes internes](#4-configuration-externe-vs-constantes-internes)
+5. [Principes philosophiques](#5-principes-philosophiques)
+6. [Ce qu'un Service NE peut PAS faire](#6-ce-quun-service-ne-peut-pas-faire)
+7. [Le Service parfait](#7-le-service-parfait)
+8. [Récapitulatif des contraintes](#8-récapitulatif-des-contraintes)
+9. [Règle d'or](#9-règle-dor)
+
+---
 
 ## 1. Définition
 
@@ -40,6 +54,10 @@ use Illuminate\Filesystem\Filesystem;
 trait FileCreator
 {
     private Filesystem $files;
+
+    // ❌ Configuration en constante interne
+    private const DEFAULT_DIRECTORY_PERMISSION = 0755;
+    private const MAX_RETRY_ATTEMPTS = 3;
 
     protected function initFileCreator(): void
     {
@@ -83,7 +101,7 @@ trait FileCreator
     private function ensureDirectoryExists(string $path): void
     {
         if (!$this->files->isDirectory($path)) {
-            $this->files->makeDirectory($path, 0755, true);
+            $this->files->makeDirectory($path, self::DEFAULT_DIRECTORY_PERMISSION, true);
         }
     }
 
@@ -236,10 +254,12 @@ namespace AndyDefer\Directive\Services;
 use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Filesystem\Filesystem;
 
+// ✅ Configuration injectée, pas de constantes internes
 final class FileCreatorService
 {
     public function __construct(
-        private readonly Filesystem $files,  // ✅ Injection explicite
+        private readonly Filesystem $files,           // ✅ Injection explicite
+        private readonly FileCreatorConfig $config,   // ✅ Config injectée (pas de private const)
     ) {}
 
     public function createFile(
@@ -248,6 +268,7 @@ final class FileCreatorService
         array $replacements,
         bool $force = false
     ): bool {
+        // ✅ Utilisation de la config injectée, pas de constante interne
         if ($this->files->exists($destinationPath) && !$force) {
             return false;
         }
@@ -272,7 +293,8 @@ final class FileCreatorService
     public function ensureDirectoryExists(string $path): void
     {
         if (!$this->files->isDirectory($path)) {
-            $this->files->makeDirectory($path, 0755, true);
+            // ✅ Config injectée pour les permissions
+            $this->files->makeDirectory($path, $this->config->directoryPermission(), true);
         }
     }
 
@@ -319,6 +341,40 @@ final class FileCreatorService
         }
 
         return $directory.$className.'.php';
+    }
+}
+```
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace AndyDefer\Directive\Configs;
+
+use AndyDefer\DomainStructures\Abstracts\AbstractConfig;
+
+// ✅ Configuration externalisée
+final class FileCreatorConfig extends AbstractConfig
+{
+    public function directoryPermission(): int
+    {
+        return (int) (getenv('FILE_CREATOR_DIR_PERMISSION') ?: 0755);
+    }
+
+    public function maxRetryAttempts(): int
+    {
+        return (int) (getenv('FILE_CREATOR_MAX_RETRY') ?: 3);
+    }
+
+    public function defaultFilePermission(): int
+    {
+        return (int) (getenv('FILE_CREATOR_FILE_PERMISSION') ?: 0644);
+    }
+
+    public function backupBeforeOverwrite(): bool
+    {
+        return getenv('FILE_CREATOR_BACKUP') === 'true';
     }
 }
 ```
@@ -478,388 +534,12 @@ final class CreateTaskDirectiveTest extends TestCase
 | **Réutilisabilité** | ✅ Réutilisable (mais dangereux) | ✅ Réutilisable (et sûr) |
 | **Debugging** | ❌ Difficile (résolution dynamique) | ✅ Facile (appel explicite) |
 | **Effets de bord** | ❌ Modifie la classe qui l'utilise | ✅ Aucun effet de bord |
+| **Configuration** | ❌ Constantes internes figées | ✅ Config injectée, modifiable |
+| **Paramétrage** | ❌ Impossible de changer sans modifier le code | ✅ Possible via différentes Configs |
 
 ---
 
-## 3. Exemple complet : Trait HasRatings (anti-pattern)
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace App\Traits;
-
-use App\Enums\RatingLevel;
-use App\Models\Rating;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Support\Collection;
-
-trait HasRatings
-{
-    public function receivedRatings(): MorphMany
-    {
-        return $this->morphMany(Rating::class, 'rateable');
-    }
-
-    public function sentRatings(): MorphMany
-    {
-        return $this->morphMany(Rating::class, 'rater');
-    }
-
-    public function averageRating(): float
-    {
-        $avg = $this->receivedRatings()->avg('rating_level');
-        if ($avg === null) {
-            return 0.0;
-        }
-        return round((float) $avg, 2);
-    }
-
-    public function averageRatingLevel(): ?RatingLevel
-    {
-        $avg = $this->averageRating();
-        if ($avg <= 1.5) return RatingLevel::ONE;
-        if ($avg <= 2.5) return RatingLevel::TWO;
-        if ($avg <= 3.5) return RatingLevel::THREE;
-        if ($avg <= 4.5) return RatingLevel::FOUR;
-        return RatingLevel::FIVE;
-    }
-
-    public function ratingsCount(): int
-    {
-        return $this->receivedRatings()->count();
-    }
-
-    public function rate(Model $rateable, RatingLevel|int $ratingLevel, ?string $review = null): Rating
-    {
-        if (is_int($ratingLevel)) {
-            $ratingLevel = RatingLevel::from($ratingLevel);
-        }
-
-        $existing = $this->getRatingFor($rateable);
-        if ($existing) {
-            $existing->update(['rating_level' => $ratingLevel->value, 'review' => $review]);
-            return $existing->fresh();
-        }
-
-        return Rating::create([
-            'rater_id' => $this->getKey(),
-            'rater_type' => $this->getMorphClass(),
-            'rateable_id' => $rateable->getKey(),
-            'rateable_type' => $rateable->getMorphClass(),
-            'rating_level' => $ratingLevel->value,
-            'review' => $review,
-        ]);
-    }
-
-    public function getRatingFor(Model $rateable): ?Rating
-    {
-        return Rating::where('rater_id', $this->getKey())
-            ->where('rater_type', $this->getMorphClass())
-            ->where('rateable_id', $rateable->getKey())
-            ->where('rateable_type', $rateable->getMorphClass())
-            ->first();
-    }
-
-    public function hasRated(Model $rateable): bool
-    {
-        return $this->getRatingFor($rateable) !== null;
-    }
-}
-
-// Utilisation du trait
-final class Product extends Model implements Rateable
-{
-    use HasRatings;  // ❌ Couplage implicite
-    
-    // Le Product se retrouve avec toutes les méthodes de rating
-    // Impossible de tester le rating sans avoir un vrai Product en base
-}
-```
-
----
-
-## 4. Exemple complet : Service RatingService (bonne pratique)
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace App\Services;
-
-use App\Enums\RatingLevel;
-use App\Models\Rating;
-use App\Configs\RatingConfig;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Collection;
-
-final class RatingService
-{
-    public function __construct(
-        private readonly RatingConfig $config,  // ✅ Config injectée
-    ) {}
-
-    public function getReceivedRatings(Model $model): Collection
-    {
-        return $this->getReceivedRatingsQuery($model)->get();
-    }
-
-    public function getAverageRating(Model $model): float
-    {
-        $avg = $this->getReceivedRatingsQuery($model)->avg('rating_level');
-        return $avg !== null ? round((float) $avg, 2) : $this->config->defaultRating();
-    }
-
-    public function getAverageRatingLevel(Model $model): RatingLevel
-    {
-        $avg = $this->getAverageRating($model);
-        
-        if ($avg <= 1.5) return RatingLevel::ONE;
-        if ($avg <= 2.5) return RatingLevel::TWO;
-        if ($avg <= 3.5) return RatingLevel::THREE;
-        if ($avg <= 4.5) return RatingLevel::FOUR;
-        return RatingLevel::FIVE;
-    }
-
-    public function getRatingsCount(Model $model): int
-    {
-        return $this->getReceivedRatingsQuery($model)->count();
-    }
-
-    public function rate(
-        Model $rater,
-        Model $rateable,
-        RatingLevel|int $ratingLevel,
-        ?string $review = null
-    ): Rating {
-        if (is_int($ratingLevel)) {
-            $ratingLevel = RatingLevel::from($ratingLevel);
-        }
-
-        // Validation avec la Config
-        if ($ratingLevel->value < $this->config->minRating() || 
-            $ratingLevel->value > $this->config->maxRating()) {
-            throw new \InvalidArgumentException('Invalid rating level');
-        }
-
-        $existing = $this->getRatingFor($rater, $rateable);
-        if ($existing) {
-            $existing->update([
-                'rating_level' => $ratingLevel->value,
-                'review' => $review,
-            ]);
-            return $existing->fresh();
-        }
-
-        return Rating::create([
-            'rater_id' => $rater->getKey(),
-            'rater_type' => $rater->getMorphClass(),
-            'rateable_id' => $rateable->getKey(),
-            'rateable_type' => $rateable->getMorphClass(),
-            'rating_level' => $ratingLevel->value,
-            'review' => $review,
-        ]);
-    }
-
-    public function getRatingFor(Model $rater, Model $rateable): ?Rating
-    {
-        return Rating::where('rater_id', $rater->getKey())
-            ->where('rater_type', $rater->getMorphClass())
-            ->where('rateable_id', $rateable->getKey())
-            ->where('rateable_type', $rateable->getMorphClass())
-            ->first();
-    }
-
-    public function hasRated(Model $rater, Model $rateable): bool
-    {
-        return $this->getRatingFor($rater, $rateable) !== null;
-    }
-
-    public function deleteRatingFor(Model $rater, Model $rateable): bool
-    {
-        $rating = $this->getRatingFor($rater, $rateable);
-        return $rating ? (bool) $rating->delete() : false;
-    }
-
-    public function getRatingsDistribution(Model $model): array
-    {
-        $distribution = [];
-        foreach (RatingLevel::cases() as $level) {
-            $distribution[$level->value] = $this->getReceivedRatingsQuery($model)
-                ->where('rating_level', $level->value)
-                ->count();
-        }
-        return $distribution;
-    }
-
-    public function getPositiveRatingPercentage(Model $model): float
-    {
-        $total = $this->getRatingsCount($model);
-        if ($total === 0) {
-            return 0.0;
-        }
-
-        $positive = $this->getReceivedRatingsQuery($model)
-            ->whereIn('rating_level', [RatingLevel::FOUR->value, RatingLevel::FIVE->value])
-            ->count();
-
-        return round(($positive / $total) * 100, 2);
-    }
-
-    private function getReceivedRatingsQuery(Model $model)
-    {
-        return Rating::where('rateable_id', $model->getKey())
-            ->where('rateable_type', $model->getMorphClass());
-    }
-}
-```
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace App\Configs;
-
-use AndyDefer\DomainStructures\Abstracts\AbstractConfig;
-
-final class RatingConfig extends AbstractConfig
-{
-    public function defaultRating(): float
-    {
-        return (float) (getenv('DEFAULT_RATING') ?: 0.0);
-    }
-
-    public function minRating(): int
-    {
-        return (int) (getenv('MIN_RATING') ?: 1);
-    }
-
-    public function maxRating(): int
-    {
-        return (int) (getenv('MAX_RATING') ?: 5);
-    }
-
-    public function requireReviewForLowRating(): bool
-    {
-        return getenv('REQUIRE_REVIEW_FOR_LOW_RATING') === 'true';
-    }
-
-    public function lowRatingThreshold(): int
-    {
-        return (int) (getenv('LOW_RATING_THRESHOLD') ?: 3);
-    }
-}
-```
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace App\Actions\Api\Products;
-
-use App\Services\RatingService;
-use App\Records\RateProductRecord;
-use App\Data\RatingData;
-use AndyDefer\Actions\AbstractAction;
-use AndyDefer\Actions\Http\ResponseFactory;
-use AndyDefer\DomainStructures\Abstracts\AbstractRecord;
-
-final class RateProductAction extends AbstractAction
-{
-    public function __construct(
-        private readonly RatingService $ratingService,  // ✅ Injection du service
-    ) {}
-
-    protected function handle(AbstractRecord $request): ResponseFactory
-    {
-        /** @var RateProductRecord $request */
-        
-        $rating = $this->ratingService->rate(
-            rater: $request->currentUserId,
-            rateable: $request->productId,
-            ratingLevel: $request->rating,
-            review: $request->review,
-        );
-
-        return ResponseFactory::json(RatingData::from($rating), 201);
-    }
-}
-```
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace App\Tests\Unit\Services;
-
-use App\Services\RatingService;
-use App\Configs\RatingConfig;
-use App\Models\Rating;
-use App\Models\User;
-use App\Models\Product;
-use PHPUnit\Framework\TestCase;
-
-final class RatingServiceTest extends TestCase
-{
-    private RatingService $service;
-    private RatingConfig $config;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        
-        // ✅ Config mockée
-        $this->config = $this->createMock(RatingConfig::class);
-        $this->config->method('defaultRating')->willReturn(0.0);
-        $this->config->method('minRating')->willReturn(1);
-        $this->config->method('maxRating')->willReturn(5);
-        
-        // ✅ Service testable sans base de données
-        $this->service = new RatingService($this->config);
-    }
-
-    public function test_get_average_rating_returns_default_when_no_ratings(): void
-    {
-        // Arrange
-        $product = $this->createMock(Product::class);
-        $product->method('getKey')->willReturn(1);
-        $product->method('getMorphClass')->willReturn('product');
-        
-        // On mocke la requête pour retourner une moyenne null
-        // ...
-        
-        // Act
-        $result = $this->service->getAverageRating($product);
-        
-        // Assert
-        $this->assertEquals(0.0, $result);
-    }
-
-    public function test_rate_throws_exception_when_rating_out_of_bounds(): void
-    {
-        // Arrange
-        $user = $this->createMock(User::class);
-        $product = $this->createMock(Product::class);
-        
-        $this->config->method('minRating')->willReturn(1);
-        $this->config->method('maxRating')->willReturn(5);
-        
-        // Act & Assert
-        $this->expectException(\InvalidArgumentException::class);
-        $this->service->rate($user, $product, 10);
-    }
-}
-```
-
----
-
-## 5. Caractéristiques fondamentales
+## 3. Caractéristiques fondamentales
 
 | Caractéristique | Règle |
 |-----------------|-------|
@@ -869,12 +549,334 @@ final class RatingServiceTest extends TestCase
 | **Stockage de données** | ❌ Ne stocke rien entre les appels |
 | **Classe finale** | ❌ **NE PEUT PAS** être déclarée `final` (doit être mockable) |
 | **Instanciation interne** | ❌ INTERDIT (tout doit être injecté) |
+| **Constantes privées** | ❌ INTERDITES (utiliser une Config injectée à la place) |
+| **Valeurs par défaut figées** | ❌ INTERDITES (injecter via Config) |
 
 ---
 
-## 6. Le Service parfait
+## 4. Configuration externe vs constantes internes (⚠️ RÈGLE MAJEURE)
 
-Voici un exemple de service qui respecte toutes les règles :
+> **⚠️ Un Service ne doit JAMAIS contenir de constantes privées ou publiques pour la configuration. Toute valeur configurable doit être injectée via une Config.**
+
+### 4.1. Pourquoi interdire les constantes ?
+
+| Problème avec `private const` | Solution avec Config injectée |
+|-------------------------------|------------------------------|
+| **Valeur figée dans le code** | Valeur modifiable sans changer le Service |
+| **Impossible à modifier pour les tests** | On peut mocker la Config pour les tests |
+| **Couplage à des valeurs spécifiques** | Découplage total |
+| **Difficulté à adapter à différents environnements** | Une Config différente par environnement |
+| **Violation de l'Open/Closed Principle** | Le Service est fermé aux modifications |
+
+### 4.2. Exemple : Service avec constantes internes (anti-pattern)
+
+```php
+// ❌ MAUVAIS - Service avec constantes internes figées
+final class BadFileCreatorService
+{
+    private const DEFAULT_DIRECTORY_PERMISSION = 0755;  // ❌ Figé dans le code
+    private const MAX_RETRY_ATTEMPTS = 3;               // ❌ Impossible à modifier
+    private const DEFAULT_FILE_PERMISSION = 0644;       // ❌ Couplage fort
+
+    public function createFile(string $path): void
+    {
+        // Utilisation des constantes figées
+        mkdir(dirname($path), self::DEFAULT_DIRECTORY_PERMISSION, true);
+        
+        for ($i = 0; $i < self::MAX_RETRY_ATTEMPTS; $i++) {
+            // Tentative d'écriture
+        }
+    }
+}
+
+// ❌ Impossible de tester avec des valeurs différentes
+// ❌ Impossible d'adapter à différents environnements
+```
+
+### 4.3. Exemple : Service avec Config injectée (bonne pratique)
+
+```php
+// ✅ BON - Service avec Config injectée
+final class GoodFileCreatorService
+{
+    public function __construct(
+        private readonly Filesystem $files,
+        private readonly FileCreatorConfig $config,  // ✅ Config injectée
+    ) {}
+
+    public function createFile(string $path): void
+    {
+        // ✅ Utilisation des valeurs de la Config (modifiables)
+        mkdir(dirname($path), $this->config->directoryPermission(), true);
+        
+        for ($i = 0; $i < $this->config->maxRetryAttempts(); $i++) {
+            // Tentative d'écriture
+        }
+    }
+}
+
+// ✅ La Config peut être modifiée sans toucher au Service
+final class FileCreatorConfig extends AbstractConfig
+{
+    public function directoryPermission(): int
+    {
+        return getenv('FILE_CREATOR_DIR_PERMISSION') ?: 0755;
+    }
+    
+    public function maxRetryAttempts(): int
+    {
+        return getenv('FILE_CREATOR_MAX_RETRY') ?: 3;
+    }
+}
+
+// ✅ Test avec des valeurs différentes
+public function test_retry_attempts(): void
+{
+    $config = $this->createMock(FileCreatorConfig::class);
+    $config->method('maxRetryAttempts')->willReturn(5);  // ✅ Modifiable pour le test
+    
+    $service = new GoodFileCreatorService($files, $config);
+}
+```
+
+### 4.4. Ce qu'une Config peut contenir
+
+| Type de valeur | Exemple | Autorisation |
+|----------------|---------|--------------|
+| Permissions fichiers | `directoryPermission(): int` | ✅ |
+| Seuils et limites | `maxRetryAttempts(): int` | ✅ |
+| Timeouts | `timeout(): int` | ✅ |
+| Chemins par défaut | `defaultPath(): string` | ✅ |
+| URLs de services | `apiBaseUrl(): string` | ✅ |
+| Clés API | `apiKey(): string` | ✅ |
+| Flags de comportement | `backupBeforeOverwrite(): bool` | ✅ |
+
+---
+
+## 5. Principes philosophiques
+
+### 5.1. Composition Over Inheritance
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Composition Over Inheritance** | Préférer l'injection de dépendances à l'héritage | L'héritage reste possible quand il est pertinent |
+
+```php
+// ✅ Composition (recommandé)
+class DatabaseService
+{
+    public function __construct(
+        private readonly ConnectionInterface $connection,  // Injection
+        private readonly LoggerInterface $logger,         // Injection
+    ) {}
+}
+
+// ⚠️ Héritage (acceptable dans certains cas)
+class SpecificDatabaseService extends DatabaseService
+{
+    // Uniquement si la relation "est-un" est claire et stable
+}
+```
+
+### 5.2. Dependency Inversion Principle (DIP)
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Dependency Inversion** | Dépendre des interfaces plutôt que des classes concrètes | Les DTOs et Value Objects peuvent être concrets |
+
+```php
+// ✅ Dépendance vers une interface (recommandé)
+interface PaymentGatewayInterface { ... }
+
+class PaymentService
+{
+    public function __construct(
+        private readonly PaymentGatewayInterface $gateway,  // Interface
+    ) {}
+}
+
+// ✅ DTO concret (acceptable)
+final class OrderData  // Pas besoin d'interface pour un DTO
+{
+    public function __construct(
+        public readonly string $id,
+        public readonly float $amount,
+    ) {}
+}
+```
+
+### 5.3. Capability-Based Design
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Capability-Based Design** | Exposer des capacités spécifiques plutôt que des services fourre-tout | Un service peut avoir plusieurs méthodes cohésives |
+
+```php
+// ❌ Service fourre-tout (anti-pattern)
+class UtilsService
+{
+    public function sendEmail() { ... }
+    public function calculateTax() { ... }
+    public function formatDate() { ... }
+    public function queryDatabase() { ... }
+}
+
+// ✅ Capacités spécifiques (recommandé)
+class EmailSender { ... }
+class TaxCalculator { ... }
+class DateFormatter { ... }
+class DatabaseQueryExecutor { ... }
+
+// ✅ Service avec plusieurs méthodes cohésives (acceptable)
+class OrderCalculatorService
+{
+    public function calculateSubtotal(Order $order): float { ... }
+    public function calculateTax(float $subtotal): float { ... }
+    public function calculateTotal(Order $order): float { ... }
+    // Toutes les méthodes sont liées au même domaine : calcul de commande
+}
+```
+
+### 5.4. Domain-Driven Design (DDD)
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Domain-Driven Design** | Organiser le code par domaine fonctionnel | La structure peut évoluer librement |
+
+```php
+// ✅ Organisation par domaine (recommandé)
+namespace App\Domain\Order\Services;
+namespace App\Domain\Order\Entities;
+namespace App\Domain\Order\ValueObjects;
+
+// ⚠️ Organisation par couche (acceptable)
+namespace App\Services;
+namespace App\Models;
+namespace App\DTOs;
+```
+
+### 5.5. Single Responsibility Principle (SRP)
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Single Responsibility** | Une classe a une seule raison de changer | La "responsabilité" peut être interprétée différemment selon le contexte |
+
+```php
+// ✅ Une seule responsabilité (recommandé)
+class EmailValidator { ... }      // Ne fait que valider
+class EmailSender { ... }          // Ne fait qu'envoyer
+class EmailFormatter { ... }       // Ne fait que formater
+
+// ✅ Responsabilité plus large mais cohérente (acceptable)
+class EmailService
+{
+    public function validate(Email $email): bool { ... }
+    public function send(Email $email): void { ... }
+    public function format(Email $email): string { ... }
+    // Toutes les méthodes concernent le même concept : Email
+}
+```
+
+### 5.6. Open/Closed Principle (OCP)
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Open/Closed** | Ouvert à l'extension, fermé à la modification | L'extension peut se faire par héritage ou composition |
+
+```php
+// ✅ Extension par composition (recommandé)
+class PaymentService
+{
+    public function __construct(
+        private readonly PaymentGatewayInterface $gateway,  // On peut injecter différents gateways
+    ) {}
+}
+
+// ⚠️ Extension par héritage (acceptable)
+class VatCalculator
+{
+    protected function getRate(): float { return 0.2; }
+}
+
+class ReducedVatCalculator extends VatCalculator
+{
+    protected function getRate(): float { return 0.1; }  // Extension par redéfinition
+}
+```
+
+### 5.7. Liskov Substitution Principle (LSP)
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Liskov Substitution** | Les sous-types doivent être substituables à leurs types de base | Les DTOs et Value Objects n'ont pas besoin d'être substituables |
+
+```php
+// ✅ Respect de LSP
+interface PaymentGateway
+{
+    public function pay(float $amount): void;  // Contrat clair
+}
+
+class StripeGateway implements PaymentGateway
+{
+    public function pay(float $amount): void { /* Implémentation */ }
+}
+
+class PayPalGateway implements PaymentGateway
+{
+    public function pay(float $amount): void { /* Implémentation */ }
+}
+
+// ✅ Pas de LSP pour DTO (acceptable)
+final class OrderData  // final, pas d'héritage, pas besoin de LSP
+{
+    public function __construct(public readonly float $amount) {}
+}
+```
+
+### 5.8. Interface Segregation Principle (ISP)
+
+| Principe | Ce qu'il encourage | Ce qu'il n'impose pas |
+|----------|-------------------|----------------------|
+| **Interface Segregation** | Préférer plusieurs petites interfaces à une grosse | Les services internes peuvent avoir des interfaces plus larges |
+
+```php
+// ✅ Interfaces ségréguées (recommandé pour les contrats publics)
+interface PaymentProcessor { ... }
+interface RefundProcessor { ... }
+interface FraudChecker { ... }
+
+// ✅ Interface plus large pour un service interne (acceptable)
+interface InternalOrderServiceInterface
+{
+    public function create(OrderData $data): Order;
+    public function update(string $id, OrderData $data): Order;
+    public function delete(string $id): void;
+    public function find(string $id): ?Order;
+    // CRUD complet, mais cohérent pour un repository interne
+}
+```
+
+---
+
+## 6. Ce qu'un Service NE peut PAS faire (⚠️ RÈGLES STRICTES)
+
+| Action | Pourquoi | Alternative |
+|--------|----------|-------------|
+| **Avoir des propriétés privées** (sauf injections) | État interne interdit | Utiliser des paramètres de méthode |
+| **Stocker des données volatiles** (compteur, dernier ID, cache) | Violation du principe sans état | Utiliser un cache externe ou un Value Object |
+| **Stocker des paramètres de configuration** (chemin, clé API) | Couplage à des valeurs figées | Injecter une Config |
+| **Avoir des constantes privées/publiques** | Valeurs figées dans le code | Injecter une Config |
+| **Être `final`** | Empêche le mocking et l'extension | Laisser la classe extensible |
+| **Instancier ses dépendances en interne** | Crée un couplage fort, impossible à tester | Injecter les dépendances |
+| **Contenir des méthodes statiques** | Couplage fort, difficile à tester | Utiliser l'injection de dépendances |
+| **Appeler des singletons globaux** (app(), resolve()) | Couplage caché, violation du DIP | Injecter les dépendances |
+| **Utiliser `new` pour créer des objets métier** | Couplage fort | Injecter des factories |
+| **Avoir des effets de bord cachés** | Comportement imprévisible | Rendre les effets de bord explicites |
+
+---
+
+## 7. Le Service parfait
 
 ```php
 <?php
@@ -895,13 +897,15 @@ use App\Data\OrderTotalData;
  * ✅ Toutes les données arrivent en paramètres
  * ✅ Pas de `final`
  * ✅ Testable et mockable
+ * ✅ Config injectée (pas de constantes internes)
+ * ✅ Respecte les principes SOLID
  */
 class OrderCalculatorService
 {
     public function __construct(
         private readonly TaxService $taxService,           // ✅ Service injecté
         private readonly DiscountService $discountService, // ✅ Service injecté
-        private readonly OrderConfig $config,              // ✅ Config injectée
+        private readonly OrderConfig $config,              // ✅ Config injectée (pas de private const)
     ) {}
 
     /**
@@ -917,6 +921,7 @@ class OrderCalculatorService
             $total += $item->price * $item->quantity;
         }
         
+        // ✅ Utilisation de la config injectée
         if ($this->config->applyRounding()) {
             $total = round($total, $this->config->roundingPrecision());
         }
@@ -939,7 +944,7 @@ class OrderCalculatorService
         $tax = $this->taxService->calculate($subtotal, $country);
         $discount = $this->discountService->apply($subtotal, $promoCode);
         
-        // Application des frais de livraison (depuis la Config)
+        // ✅ Application des frais de livraison (depuis la Config)
         $shippingFee = $order->total > $this->config->freeShippingThreshold() 
             ? 0.0 
             : $this->config->standardShippingFee();
@@ -992,6 +997,7 @@ namespace App\Configs;
 
 use AndyDefer\DomainStructures\Abstracts\AbstractConfig;
 
+// ✅ Configuration externalisée, pas de constantes dans le Service
 final class OrderConfig extends AbstractConfig
 {
     public function freeShippingThreshold(): float
@@ -1017,6 +1023,17 @@ final class OrderConfig extends AbstractConfig
     public function maxItemsPerOrder(): int
     {
         return (int) (getenv('MAX_ITEMS_PER_ORDER') ?: 100);
+    }
+
+    public function vatRate(string $country): float
+    {
+        $rates = [
+            'FR' => (float) (getenv('VAT_RATE_FR') ?: 0.2),
+            'DE' => (float) (getenv('VAT_RATE_DE') ?: 0.19),
+            'BE' => (float) (getenv('VAT_RATE_BE') ?: 0.21),
+        ];
+        
+        return $rates[$country] ?? (float) (getenv('VAT_RATE_DEFAULT') ?: 0.2);
     }
 }
 ```
@@ -1083,6 +1100,7 @@ final class OrderCalculatorServiceTest extends TestCase
         // Arrange
         $this->config->method('freeShippingThreshold')->willReturn(50.0);
         $this->config->method('standardShippingFee')->willReturn(5.99);
+        $this->config->method('vatRate')->with('FR')->willReturn(0.2);
         
         $this->taxService->method('calculate')->willReturn(7.0);
         $this->discountService->method('apply')->willReturn(10.0);
@@ -1103,58 +1121,51 @@ final class OrderCalculatorServiceTest extends TestCase
         $this->assertEquals(97.0, $result->total);
     }
 
-    public function test_is_eligible_for_free_shipping_when_above_threshold(): void
+    public function test_config_can_be_changed_for_tests(): void
     {
-        // Arrange
-        $this->config->method('freeShippingThreshold')->willReturn(50.0);
+        // ✅ La config peut être modifiée sans changer le Service
+        $this->config->method('freeShippingThreshold')->willReturn(100.0);  // Seuil différent
         
         $order = new OrderRecord(items: [], total: 75.0);
         
-        // Act
         $result = $this->service->isEligibleForFreeShipping($order);
         
-        // Assert
-        $this->assertTrue($result);
+        // Le seuil étant à 100, la commande à 75 n'est pas éligible
+        $this->assertFalse($result);
     }
 }
 ```
 
 ---
 
-## 7. Ce qu'un Service NE peut PAS faire
-
-| Action | Pourquoi |
-|--------|----------|
-| **Avoir des propriétés privées** (sauf injections) | État interne interdit |
-| **Stocker des données volatiles** (compteur, dernier ID, cache) | Violation du principe sans état |
-| **Stocker des paramètres de configuration** (chemin, clé API) | Utiliser une Config à la place |
-| **Être `final`** | Empêche le mocking et l'extension |
-| **Instancier ses dépendances en interne** | Crée un couplage fort, impossible à tester |
-
----
-
 ## 8. Récapitulatif des contraintes
 
-| Contrainte | Règle |
-|------------|-------|
-| **Propriétés privées** | ❌ AUCUNE (sauf injections) |
-| **État interne** | ❌ INTERDIT |
-| **Stockage de Configs** | ✅ AUTORISÉ (immuables) |
-| **Stockage de Services** | ✅ AUTORISÉ (dépendances) |
-| **Stockage de données volatiles** | ❌ INTERDIT |
-| **Constructeur** | ✅ Uniquement pour l'injection |
-| **Classe `final`** | ❌ INTERDIT |
-| **Instanciation interne** | ❌ INTERDIT |
+| Contrainte | Règle | Exception |
+|------------|-------|-----------|
+| **Propriétés privées** | ❌ AUCUNE (sauf injections) | Aucune |
+| **État interne** | ❌ INTERDIT | Aucune |
+| **Stockage de Configs** | ✅ AUTORISÉ (immuables) | - |
+| **Stockage de Services** | ✅ AUTORISÉ (dépendances) | - |
+| **Stockage de données volatiles** | ❌ INTERDIT | Aucune |
+| **Constructeur** | ✅ Uniquement pour l'injection | Aucune |
+| **Classe `final`** | ❌ INTERDIT | Aucune |
+| **Instanciation interne** | ❌ INTERDIT | Aucune |
+| **Constantes privées** | ❌ INTERDITES | Aucune (utiliser Config) |
+| **Méthodes statiques** | ❌ INTERDITES | Aucune |
+| **Singletons globaux** | ❌ INTERDITS | Aucune |
+| **`new` sur objets métier** | ❌ INTERDIT | Injecter des factories |
 
 ---
 
 ## 9. Règle d'or
 
-> **Un Service est un conteneur pur de méthodes. Il n'a pas de mémoire, pas d'état interne, pas de cache. Toute donnée dont il a besoin lui est fournie au moment de l'appel.**
+> **Un Service est un conteneur pur de méthodes. Il n'a pas de mémoire, pas d'état interne, pas de cache, pas de constantes internes. Toute donnée dont il a besoin lui est fournie au moment de l'appel ou injectée via le constructeur.**
 >
 > **⚠️ Les Services remplacent les traits : là où on aurait utilisé un trait (couplage implicite, testabilité impossible), on utilise un service injecté (composition explicite, testabilité parfaite).**
 >
-> **La composition est la clé : un service peut utiliser d'autres services, tous injectés dans le constructeur. Jamais d'instanciation interne, jamais de stockage d'état.**
+> **⚠️ Les constantes privées sont interdites : toute valeur configurable doit être injectée via une Config.**
+>
+> **La composition est la clé : un service peut utiliser d'autres services, tous injectés dans le constructeur. Jamais d'instanciation interne, jamais de stockage d'état, jamais de constantes figées.**
 
 ```php
 // ✅ Le Service parfait
@@ -1162,9 +1173,9 @@ class PerfectService
 {
     // ✅ Uniquement des injections dans le constructeur
     public function __construct(
-        private readonly AnotherService $service,  // Service injecté
-        private readonly AppConfig $config,        // Config injectée
-        private readonly UserRepository $repo,     // Repository injecté
+        private readonly AnotherService $service,   // Service injecté
+        private readonly AppConfig $config,         // Config injectée (pas de constantes internes)
+        private readonly UserRepository $repo,      // Repository injecté
     ) {}
 
     // ✅ Toutes les données arrivent en paramètres
@@ -1173,10 +1184,13 @@ class PerfectService
         // ✅ Pas d'état interne
         // ✅ Pas de cache
         // ✅ Pas de compteur
+        // ✅ Pas de constantes
         // ✅ Utilisation des dépendances injectées
         
         $subtotal = $this->calculateSubtotal($order);
-        $tax = $this->service->calculateTax($subtotal, $user->country);
+        
+        // ✅ Les valeurs config (seuils, taux, etc.) viennent de la Config injectée
+        $tax = $this->service->calculateTax($subtotal, $user->country, $this->config->vatRate($user->country));
         
         return new Result($subtotal + $tax);
     }
@@ -1187,6 +1201,21 @@ class PerfectService
     }
 }
 
+// ✅ La Config externalisée (pas de constantes dans le Service)
+final class AppConfig extends AbstractConfig
+{
+    public function vatRate(string $country): float
+    {
+        // ✅ Valeurs modifiables via environnement
+        return match($country) {
+            'FR' => (float) (getenv('VAT_RATE_FR') ?: 0.20),
+            'DE' => (float) (getenv('VAT_RATE_DE') ?: 0.19),
+            'BE' => (float) (getenv('VAT_RATE_BE') ?: 0.21),
+            default => (float) (getenv('VAT_RATE_DEFAULT') ?: 0.20),
+        };
+    }
+}
+
 // ✅ Test parfait
 final class PerfectServiceTest extends TestCase
 {
@@ -1194,12 +1223,17 @@ final class PerfectServiceTest extends TestCase
     {
         // Tous les services peuvent être mockés
         $service = $this->createMock(AnotherService::class);
+        
+        // ✅ La Config peut être mockée pour simuler différents environnements
         $config = $this->createMock(AppConfig::class);
+        $config->method('vatRate')->with('FR')->willReturn(0.10);  // TVA à 10% pour le test
+        
         $repo = $this->createMock(UserRepository::class);
         
         $perfectService = new PerfectService($service, $config, $repo);
         
         // Test isolé, sans effets de bord, sans fichiers réels, sans base de données
+        // ✅ Les valeurs de configuration sont mockées, pas figées dans le code
         $result = $perfectService->execute($order, $user);
         
         $this->assertInstanceOf(Result::class, $result);
